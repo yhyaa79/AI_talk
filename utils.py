@@ -5,12 +5,14 @@ import time
 import requests
 import json
 import io
+import logging
 
 load_dotenv()                    # ← .env رو می‌خونه
 API_KEY_OPENROUTER = os.getenv("API_KEY_OPENROUTER")
 API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
 
-
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 ######## fert step #########
 
@@ -71,6 +73,10 @@ def auto_to_text(input_binary, filename="audio.mp3", model="#g1_whisper-medium",
 
 # تابع LLM (از کد تو)
 def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
+    """
+    نسخه streaming از text_to_text. chunks را yield می‌کند.
+    """
+    logger.debug(f"شروع streaming LLM برای متن: {input_text[:100]}...")  # لاگ دیباگ
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
         headers={
@@ -81,17 +87,42 @@ def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
         },
         data=json.dumps({
             "model": model,
-            "messages": [{"role": "user", "content": input_text}]
-        })
+            "messages": [{"role": "user", "content": input_text}],
+            "stream": True  # فعال کردن streaming
+        }),
+        stream=True  # stream را در requests هم فعال کنید
     )
     
-    if response.status_code == 200:
-        result = response.json()
-        return result.get('choices', [{}])[0].get('message', {}).get('content', 'نامشخص')
-    else:
-        print(f"خطا در LLM: {response.status_code} - {response.text}")
-        return "متأسفانه خطایی در پردازش متن رخ داد."
-
+    if response.status_code != 200:
+        logger.error(f"خطا در LLM streaming: {response.status_code} - {response.text}")
+        yield "متأسفانه خطایی در پردازش متن رخ داد."
+        return
+    
+    current_chunk = ""
+    for line in response.iter_lines():
+        if line:
+            line = line.decode('utf-8')
+            if line.startswith('data: '):
+                data = line[6:]  # حذف 'data: '
+                if data == '[DONE]':
+                    break
+                try:
+                    json_data = json.loads(data)
+                    delta = json_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                    if delta:
+                        current_chunk += delta
+                        # yield هر chunk کوچک (مثلاً هر 5-10 کاراکتر یا بر اساس token)
+                        if len(current_chunk) >= 10:  # تنظیم اندازه chunk برای دیباگ و عملکرد
+                            yield current_chunk
+                            current_chunk = ""
+                except json.JSONDecodeError:
+                    continue
+    
+    # chunk باقی‌مانده
+    if current_chunk:
+        yield current_chunk
+    
+    logger.debug("پایان streaming LLM")
 
 
 # تابع TTS (از کد تو)
