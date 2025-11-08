@@ -22,12 +22,25 @@
         <input type="file" id="audioFile" accept="audio/*" style="margin: 10px; display: none;">
         <button id="sendFileBtn" title="ارسال فایل صوتی">📁 ارسال فایل</button>
         <div id="status">آماده برای رکورد...</div>
+        <!-- جدید: المان انتخاب زبان -->
+        <select id="languageSelect" style="margin: 10px; padding: 5px;">
+            <option value="fa">فارسی</option>
+            <option value="en" selected>English</option>
+        </select>
+
+        <select id="modelSelect" style="margin: 10px; padding: 5px;">
+            <option value="tiny">tiny</option>
+            <option value="small">small</option>
+            <option value="medium" selected>medium</option>
+            <option value="large">large</option>
+            <option value="base">base</option>
+        </select>
 
         <!-- بخش streaming: لیست chunks که یکی یکی اضافه می‌شود -->
         <div id="playlist" style="margin: 10px 0; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
             <!-- Audio elements will be appended here sequentially -->
         </div>
-        <div id="progress">در حال دریافت: 0 / 0</div>
+        <div id="progress"></div>
     </div>
 
     <script>
@@ -56,6 +69,8 @@
                 const formData = new FormData();
                 formData.append('audio', renamedFile);
                 sendAudioStream(formData);  // تغییر به stream
+                formData.append('language', document.getElementById('languageSelect').value);
+                formData.append('model', document.getElementById('modelSelect').value);
                 status.textContent = 'در حال پردازش فایل...';
             }
         });
@@ -72,6 +87,8 @@
                         const audioBlob = new Blob(audioChunks, { type: 'audio/mpeg' });
                         const formData = new FormData();
                         formData.append('audio', audioBlob, 'user_audio.mp3');
+                        formData.append('language', document.getElementById('languageSelect').value);
+                        formData.append('model', document.getElementById('modelSelect').value);
                         sendAudioStream(formData);  // تغییر به stream
                     };
 
@@ -147,7 +164,7 @@
         audioPlaylist.push(audio);
         const audioDiv = document.createElement('div');
         const textSpan = document.createElement('span');
-        textSpan.textContent = `قطعه ${index + 1}: ${chunkText || '...'}`;
+        textSpan.textContent = chunkText;
         textSpan.style.display = 'block';
         textSpan.style.fontSize = 'small';
         textSpan.style.color = '#666';
@@ -176,7 +193,7 @@
             
             const audioDiv = document.createElement('div');
             const textSpan = document.createElement('span');
-            textSpan.textContent = `قطعه ${index + 1}: ${chunkText || '...'}`;
+            textSpan.textContent = chunkText;
             textSpan.style.display = 'block';
             textSpan.style.fontSize = 'small';
             textSpan.style.color = '#666';
@@ -253,6 +270,8 @@
                 playlistDiv.innerHTML = '';
                 progressDiv.textContent = `در حال دریافت: 0 / ${totalChunks}`;
                 status.textContent = 'شروع تولید پاسخ...';
+                currentIndex = -1;
+                isPlaying = false;
             } else if (data.type === 'audio_chunk') {
                 addAudioToPlaylist(data.index, data.chunk_text, data.audio_b64);
             } else if (data.type === 'error_chunk') {

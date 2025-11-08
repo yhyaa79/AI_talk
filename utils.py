@@ -11,20 +11,19 @@ load_dotenv()                    # ← .env رو می‌خونه
 API_KEY_OPENROUTER = os.getenv("API_KEY_OPENROUTER")
 API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
 ######## fert step #########
 
 
 
 # تابع STT (از کد تو)
-def auto_to_text(input_binary, filename="audio.mp3", model="#g1_whisper-medium", language='en', sleep_time=2):
+def voice_to_text(input_binary, language, model_selekt, filename="audio.mp3", sleep_time=1):
+    print("...voice_to_text...")
     s = requests.Session()
     s.headers = {"Authorization": f"Bearer {API_KEY_AIMLAPI}"}
     
     files = {"audio": (filename, input_binary, "audio/mpeg")}
-    data = {"model": model, "language": language}
+    data = {"model": model_selekt, "language": language}
     
     r = s.post("https://api.aimlapi.com/v1/stt/create", data=data, files=files, timeout=60)
     if r.status_code not in (200, 201):
@@ -76,7 +75,10 @@ def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
     """
     نسخه streaming از text_to_text. chunks را yield می‌کند.
     """
-    logger.debug(f"شروع streaming LLM برای متن: {input_text[:100]}...")  # لاگ دیباگ
+    print("...text_to_text...")
+    ### تغییر: اضافه کردن system prompt پیش‌فرض
+    system_prompt = "You are a voice AI assistant and the output text is converted to audio, please use '.' to complete each sentence and do not write long sentences."
+    
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
         headers={
@@ -87,14 +89,16 @@ def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
         },
         data=json.dumps({
             "model": model,
-            "messages": [{"role": "user", "content": input_text}],
+            "messages": [
+                {"role": "system", "content": system_prompt},  ### تغییر: system message اضافه شد
+                {"role": "user", "content": input_text}
+            ],
             "stream": True  # فعال کردن streaming
         }),
         stream=True  # stream را در requests هم فعال کنید
     )
     
     if response.status_code != 200:
-        logger.error(f"خطا در LLM streaming: {response.status_code} - {response.text}")
         yield "متأسفانه خطایی در پردازش متن رخ داد."
         return
     
@@ -122,17 +126,14 @@ def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
     if current_chunk:
         yield current_chunk
     
-    logger.debug("پایان streaming LLM")
-
 
 # تابع TTS (از کد تو)
 def text_to_auto(input_text, model="elevenlabs/v3_alpha", name_voice="Alice"):
+    print("...text_to_auto...")
     url = "https://api.aimlapi.com/v1/tts"
     headers = {
         "Authorization": f"Bearer {API_KEY_AIMLAPI}",
     }
-    print('.,.,,,,,,,,,,,')
-    print(input_text)
 
     payload = {
         "model": model,
@@ -154,7 +155,7 @@ def text_to_auto(input_text, model="elevenlabs/v3_alpha", name_voice="Alice"):
 
 
 
-""" def auto_to_text(input_binary, filename="audio.mp3", model="#g1_whisper-medium", language='en', sleep_time=2):
+""" def voice_to_text(input_binary, filename="audio.mp3", model="#g1_whisper-medium", language='en', sleep_time=2):
     s = requests.Session()
     s.headers = {"Authorization": f"Bearer {API_KEY_AIMLAPI}"}
     
@@ -287,7 +288,7 @@ def text_to_auto(input_text, model="elevenlabs/v3_alpha", name_voice="Alice", fi
 
 def main():
     print("\nfert step")
-    result_auto_to_text = auto_to_text(input_auto, model="#g1_whisper-tiny", language='en', sleep_time=2)
+    result_auto_to_text = voice_to_text(input_auto, model="#g1_whisper-tiny", language='en', sleep_time=2)
     print(f'result_auto_to_text{result_auto_to_text}\n')
 
     print("\nsecond step")
