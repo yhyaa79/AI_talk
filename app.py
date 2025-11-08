@@ -79,7 +79,25 @@ def process_audio_stream():
     language = str(request.form.get('language'))
     model = request.form.get('model')
 
-    model_selekt = f"#g1_whisper-{model}"
+    # --- جایگزین این بخش ---
+    if model == None:
+        model = 'medium'
+
+    # مدل‌های معتبر
+    model_map = {
+        'tiny': 'whisper-1-tiny',
+        'base': 'whisper-1-base',
+        'small': 'whisper-1-small',
+        'medium': 'whisper-1-medium',
+        'large': 'whisper-1-large-v3'
+    }
+
+    model_selekt = model_map.get(model.lower(), 'whisper-1-medium')
+
+    # زبان معتبر
+    if not language or language not in ['en', 'fa', 'es', 'fr', 'de']:
+        language = 'en'
+    # --- تا اینجا ---
 
     if audio_file.filename == '':
         return jsonify({'error': 'فایل خالی است'}), 400
@@ -183,4 +201,4 @@ def process_audio_stream():
     })
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8070)  # پورت 5001 به جای 5000
+    app.run(debug=True, host='0.0.0.0', port=8090)  
