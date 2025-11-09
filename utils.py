@@ -71,14 +71,42 @@ def voice_to_text(input_binary, language, model_selekt, filename="audio.mp3", sl
 
 
 # تابع LLM (از کد تو)
-def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
+
+
+def text_to_text(input_text, history=None, model="openai/gpt-3.5-turbo"):
     """
-    نسخه streaming از text_to_text. chunks را yield می‌کند.
+    نسخه streaming از text_to_text با پشتیبانی از تاریخچه مکالمه.
+    history: لیست دیکشنری‌های پیام‌های قبلی (هر کدام شامل role و content)
     """
     print("...text_to_text...")
-    ### تغییر: اضافه کردن system prompt پیش‌فرض
-    system_prompt = "You are a voice AI assistant and the output text is converted to audio, please use '.' to complete each sentence and do not write long sentences."
     
+    # سیستم پرامپت پیش‌فرض
+    system_prompt = {
+        "role": "system",
+        "content": "You are a voice AI assistant and the output text is converted to audio, please use '.' to complete each sentence and do not write long sentences."
+    }
+    
+    # پیام کاربر جدید
+    user_message = {
+        "role": "user",
+        "content": input_text
+    }
+    
+    # ساخت لیست messages
+    messages = [system_prompt]
+    
+    # اضافه کردن تاریخچه (اگر وجود داشت)
+    if history:
+        # مطمئن شو که تاریخچه فقط شامل پیام‌های user و assistant باشه (نه system)
+        for msg in history:
+            if msg.get("role") in ["user", "assistant"]:
+                messages.append(msg)
+    
+    # اضافه کردن پیام جدید کاربر
+    messages.append(user_message)
+    
+    print(f"messages in text_to_text: {messages}")
+    # ارسال درخواست streaming
     response = requests.post(
         url="https://openrouter.ai/api/v1/chat/completions",
         headers={
@@ -89,13 +117,10 @@ def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
         },
         data=json.dumps({
             "model": model,
-            "messages": [
-                {"role": "system", "content": system_prompt},  ### تغییر: system message اضافه شد
-                {"role": "user", "content": input_text}
-            ],
-            "stream": True  # فعال کردن streaming
+            "messages": messages,
+            "stream": True
         }),
-        stream=True  # stream را در requests هم فعال کنید
+        stream=True
     )
     
     if response.status_code != 200:
@@ -107,7 +132,7 @@ def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
         if line:
             line = line.decode('utf-8')
             if line.startswith('data: '):
-                data = line[6:]  # حذف 'data: '
+                data = line[6:]
                 if data == '[DONE]':
                     break
                 try:
@@ -115,17 +140,15 @@ def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
                     delta = json_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
                     if delta:
                         current_chunk += delta
-                        # yield هر chunk کوچک (مثلاً هر 5-10 کاراکتر یا بر اساس token)
-                        if len(current_chunk) >= 10:  # تنظیم اندازه chunk برای دیباگ و عملکرد
+                        if len(current_chunk) >= 10:
                             yield current_chunk
                             current_chunk = ""
                 except json.JSONDecodeError:
                     continue
     
-    # chunk باقی‌مانده
     if current_chunk:
         yield current_chunk
-    
+
 
 # تابع TTS (از کد تو)
 def text_to_auto(input_text, model="elevenlabs/v3_alpha", name_voice="Alice"):

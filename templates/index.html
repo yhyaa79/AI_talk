@@ -40,7 +40,9 @@
         <div id="playlist" style="margin: 10px 0; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
             <!-- Audio elements will be appended here sequentially -->
         </div>
-        <div id="progress"></div>
+        <div>
+            <button id="resetButton" style="background-color: #dc3545; width: 350px; height: 33px;">reset</button>
+        </div>
     </div>
 
     <script>
@@ -51,9 +53,9 @@
         const micBtn = document.getElementById('micBtn');
         const status = document.getElementById('status');
         const playlistDiv = document.getElementById('playlist');
-        const progressDiv = document.getElementById('progress');
         const audioFileInput = document.getElementById('audioFile');
         const sendFileBtn = document.getElementById('sendFileBtn');
+        const resetButton = document.getElementById('resetButton');
         let isPlaying = false; // جدید: ردیابی وضعیت پخش
         let currentIndex = -1; // جدید: ایندکس صوت فعلی
 
@@ -169,10 +171,10 @@
         textSpan.style.fontSize = 'small';
         textSpan.style.color = '#666';
         audioDiv.appendChild(textSpan);
+        console.log(chunkText);
         audioDiv.appendChild(audio);
         playlistDiv.appendChild(audioDiv);
         receivedChunks++;
-        progressDiv.textContent = `در حال دریافت: ${receivedChunks} / ${totalChunks}`;
         
         // جدید: اگر autoPlay فعال و چیزی پخش نمی‌شود، پخش بعدی را شروع کن
         if (autoPlay && !isPlaying) {
@@ -197,12 +199,12 @@
             textSpan.style.display = 'block';
             textSpan.style.fontSize = 'small';
             textSpan.style.color = '#666';
+            console.log(chunkText);
             audioDiv.appendChild(textSpan);
             audioDiv.appendChild(audio);
             playlistDiv.appendChild(audioDiv);
             
             receivedChunks++;
-            progressDiv.textContent = `در حال دریافت: ${receivedChunks} / ${totalChunks}`;
         
 
         // تابع ارسال با streaming (SSE)
@@ -268,7 +270,6 @@
                 receivedChunks = 0;
                 audioPlaylist = [];
                 playlistDiv.innerHTML = '';
-                progressDiv.textContent = `در حال دریافت: 0 / ${totalChunks}`;
                 status.textContent = 'شروع تولید پاسخ...';
                 currentIndex = -1;
                 isPlaying = false;
@@ -278,7 +279,6 @@
                 status.textContent += ` خطا در قطعه ${data.index}: ${data.message}`;
             } else if (data.type === 'end') {
             status.textContent = 'پاسخ کامل شد!';
-            progressDiv.textContent = `کامل: ${receivedChunks} / ${totalChunks}`;
             if (autoPlay && !isPlaying) {
                 playNext(); // جدید: شروع پخش از اول اگر هنوز شروع نشده
             }
@@ -286,6 +286,36 @@
                 status.textContent = 'خطا: ' + data.error;
             }
         }
+
+        resetButton.addEventListener('click', resetHistory);
+
+        async function resetHistory() {
+            console.log("در حال ریست کردن تاریخچه...");
+            status.textContent = "در حال ریست...";
+
+            try {
+                const response = await fetch("/reset_history", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    console.log("تاریخچه ریست شد.");
+                    status.textContent = "تاریخچه ریست شد.";
+                    playlistDiv.innerHTML = ''; // پاک کردن لیست پخش
+                } else {
+                    const error = await response.text();
+                    console.error("خطا:", response.status, error);
+                    status.textContent = "خطا در ریست.";
+                }
+            } catch (err) {
+                console.error("خطای شبکه:", err);
+                status.textContent = "عدم ارتباط با سرور.";
+            }
+        }
+
     </script>
 </body>
 </html>

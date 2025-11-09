@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, jsonify, send_file, Response
+from flask import Flask, render_template, request, jsonify, send_file, Response, session
 from utils import voice_to_text, text_to_text, text_to_auto
 from dotenv import load_dotenv
 from config import processing
@@ -15,16 +15,20 @@ import re
 import json
 import base64
 import io
+import uuid
 
+history = []
 
 load_dotenv()
 API_KEY_OPENROUTER = os.getenv("API_KEY_OPENROUTER")
 API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
 
 app = Flask(__name__)
+app.secret_key = 'my_secret_key'  # باید یه مقدار تصادفی و امن باشه
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
 
 
 def extract_last_complete_sentence(text, sentence_enders=r'[.!؟؛]'):
@@ -47,26 +51,20 @@ def extract_last_complete_sentence(text, sentence_enders=r'[.!؟؛]'):
 # روت اصلی: سرو کردن HTML
 @app.route('/')
 def index():
+    user_id = session.get('user_id')
+    if not user_id:
+        user_id = str(uuid.uuid4())
+        session['user_id'] = user_id
+        
     return render_template('index.html')
 
-# اندپوینت به‌روز شده: /process_audio (سازگار با Flask 1.x و بالاتر)
-@app.route('/process_audio', methods=['POST'])
-def process_audio():
-    if 'audio' not in request.files:
-        return jsonify({'error': 'هیچ فایلی ارسال نشده'}), 400
-    
-    audio_file = request.files['audio']
-    if audio_file.filename == '':
-        return jsonify({'error': 'فایل خالی است'}), 400
-    
-    input_binary = audio_file.read()
-    result = processing(input_binary)
-    
-    if 'error' in result:
-        return jsonify(result), 500
-    
-    return jsonify(result)
 
+@app.route('/reset_history', methods=['POST'])
+def reset_history():
+    print('??????????????????????????????????')
+    global history
+    history = []
+    return jsonify({'status': 'history reset', 'message': 'تاریخچه مکالمه پاک شد'})
 
 # فرض: text_to_text_stream و voice_to_text و text_to_auto مثل قبل تعریف شدن
 
@@ -79,25 +77,7 @@ def process_audio_stream():
     language = str(request.form.get('language'))
     model = request.form.get('model')
 
-    # --- جایگزین این بخش ---
-    if model == None:
-        model = 'medium'
-
-    # مدل‌های معتبر
-    model_map = {
-        'tiny': 'whisper-1-tiny',
-        'base': 'whisper-1-base',
-        'small': 'whisper-1-small',
-        'medium': 'whisper-1-medium',
-        'large': 'whisper-1-large-v3'
-    }
-
-    model_selekt = model_map.get(model.lower(), 'whisper-1-medium')
-
-    # زبان معتبر
-    if not language or language not in ['en', 'fa', 'es', 'fr', 'de']:
-        language = 'en'
-    # --- تا اینجا ---
+    model_selekt = f"#g1_whisper-{model}"
 
     if audio_file.filename == '':
         return jsonify({'error': 'فایل خالی است'}), 400
@@ -121,9 +101,18 @@ def process_audio_stream():
         sentence_enders = r'[.!؟؛]'  # الگوی پایان جمله (بدون \n برای split دقیق‌تر)
         
         yield f"data: {json.dumps({'type': 'start'})}\n\n"
+
+
+
+
+        llm_stream = text_to_text(user_text, history)
         
-        # Streaming LLM
-        llm_stream = text_to_text(user_text)
+        # پیام کاربر را اول اضافه کن
+        history.append({"role": "user", "content": user_text})
+        print(f"history::: {history}")
+
+        all_text = ''
+
         for llm_chunk in llm_stream:
             if not llm_chunk:
                 continue
@@ -138,9 +127,12 @@ def process_audio_stream():
                 # Extract آخرین جمله کامل و remaining
                 complete_sentence, remaining = extract_last_complete_sentence(current_chunk, sentence_enders)
                 print(f'**Sentenced text:  {complete_sentence}')
+                
 
                 if complete_sentence.strip() and not complete_sentence == '.':  # اگر جمله خالی نبود
                     try:
+                        all_text.append(complete_sentence)
+                        
                         audio_binary = text_to_auto(complete_sentence)
                         
                         if not audio_binary or len(audio_binary) == 0:
@@ -172,11 +164,18 @@ def process_audio_stream():
             # Timeout
             if time.time() - start_time > 30:
                 break
-        
+
+        history.append({"role": "assistant", "content": all_text})
+        print(f"history::: {history}")
+        print(f"/////all_text::: {all_text}")
+
         # Chunk نهایی: هر چیزی که باقی مونده (بدون شرط)
         if current_chunk.strip():
             try:
                 audio_binary = text_to_auto(current_chunk.strip())
+                history.append({"role": "assistant", "content": current_chunk.strip()})
+                print(f"history::: {history}")
+
                 if audio_binary and len(audio_binary) > 0:
                     audio_b64 = base64.b64encode(audio_binary).decode('utf-8')
                     chunk_data = {
