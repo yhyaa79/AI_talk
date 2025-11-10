@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>چت صوتی با AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 480px;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 40px 30px;
+            border-radius: 24px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            font-size: 28px;
+            color: #2d3748;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: #718096;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        /* Status Box با انیمیشن */
+        .status-container {
+            position: relative;
+            margin: 30px 0;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .status-background {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        /* حالت 1: آماده */
+        .status-background.ready {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .status-background.ready::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+        }
+
+        /* حالت 2: رکورد */
+        .status-background.recording {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .status-background.recording::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.1) 10px,
+                transparent 20px
+            );
+            animation: slide 1.5s linear infinite;
+        }
+
+        /* حالت 3: پردازش */
+        .status-background.processing {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .status-background.processing::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(
+                90deg,
+                transparent,
+                rgba(255, 255, 255, 0.3),
+                transparent
+            );
+            animation: shimmer 2s infinite;
+        }
+
+        /* حالت 4: تولید پاسخ */
+        .status-background.generating {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .status-background.generating::before,
+        .status-background.generating::after {
+            content: '';
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .status-background.generating::before {
+            animation: float1 3s ease-in-out infinite;
+            left: 10%;
+            top: 20%;
+        }
+
+        .status-background.generating::after {
+            animation: float2 3s ease-in-out infinite;
+            right: 10%;
+            bottom: 20%;
+        }
+
+        #status {
+            position: relative;
+            z-index: 2;
+            color: white;
+            font-size: 16px;
+            font-weight: 500;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        /* انیمیشن‌ها */
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1) translate(-50%, -50%);
+                opacity: 0.5;
+            }
+            50% {
+                transform: scale(1.1) translate(-45%, -45%);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes slide {
+            0% {
+                transform: translateX(-20px);
+            }
+            100% {
+                transform: translateX(20px);
+            }
+        }
+
+        @keyframes shimmer {
+            0% {
+                transform: translateX(-100%);
+            }
+            100% {
+                transform: translateX(100%);
+            }
+        }
+
+        @keyframes float1 {
+            0%, 100% {
+                transform: translate(0, 0);
+            }
+            33% {
+                transform: translate(30px, -20px);
+            }
+            66% {
+                transform: translate(-20px, 20px);
+            }
+        }
+
+        @keyframes float2 {
+            0%, 100% {
+                transform: translate(0, 0);
+            }
+            33% {
+                transform: translate(-30px, 20px);
+            }
+            66% {
+                transform: translate(20px, -20px);
+            }
+        }
+
+        /* دکمه‌ها */
+        .controls {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+
+        #micBtn {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            border: none;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-size: 32px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #micBtn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+
+        #micBtn:active {
+            transform: translateY(0);
+        }
+
+        #micBtn.recording {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            animation: recordPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes recordPulse {
+            0%, 100% {
+                box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4);
+            }
+            50% {
+                box-shadow: 0 4px 25px rgba(245, 87, 108, 0.8);
+            }
+        }
+
+        #sendFileBtn {
+            padding: 12px 24px;
+            border-radius: 12px;
+            border: 2px solid #667eea;
+            background: white;
+            color: #667eea;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        #sendFileBtn:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        /* Select boxes */
+        .settings {
+            display: flex;
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        select {
+            flex: 1;
+            padding: 10px 15px;
+            border-radius: 10px;
+            border: 2px solid #e2e8f0;
+            background: white;
+            color: #2d3748;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        /* Playlist */
+        #playlist {
+            margin: 20px 0;
+            max-height: 300px;
+            overflow-y: auto;
+            border-radius: 12px;
+            background: #f7fafc;
+            padding: 15px;
+        }
+
+        #playlist::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        #playlist::-webkit-scrollbar-track {
+            background: #e2e8f0;
+            border-radius: 3px;
+        }
+
+        #playlist::-webkit-scrollbar-thumb {
+            background: #cbd5e0;
+            border-radius: 3px;
+        }
+
+        #playlist > div {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        #playlist span {
+            display: block;
+            font-size: 13px;
+            color: #4a5568;
+            margin-bottom: 8px;
+        }
+
+        audio {
+            width: 100%;
+            height: 40px;
+            border-radius: 6px;
+        }
+
+        /* Reset button */
+        #resetButton {
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: none;
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(245, 87, 108, 0.3);
+        }
+
+        #resetButton:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        #resetButton:active {
+            transform: translateY(0);
+        }
+
+        #buttonPlayAgain {
+            display: none;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>چت صوتی با AI</h1>
+        <p class="subtitle">با هوش مصنوعی صحبت کنید و پاسخ بگیرید</p>
+
+        <div class="status-container">
+            <div id="statusBackground" class="status-background ready"></div>
+            <div id="status">آماده برای رکورد...</div>
+        </div>
+
+        <div class="controls">
+            <button id="micBtn" title="شروع رکورد">🎤</button>
+            <button id="sendFileBtn" title="ارسال فایل صوتی">📁 ارسال فایل</button>
+        </div>
+
+        <input type="file" id="audioFile" accept="audio/*" style="display: none;">
+
+        <div class="settings">
+            <select id="languageSelect">
+                <option value="default" selected>زبان: پیش‌فرض</option>
+                <option value="fa">فارسی</option>
+                <option value="en">English</option>
+            </select>
+
+            <select id="modelSelect">
+                <option value="tiny">مدل: Tiny</option>
+                <option value="small">Small</option>
+                <option value="medium" selected>Medium</option>
+                <option value="large">Large</option>
+                <option value="base">Base</option>
+            </select>
+        </div>
+
+        <div id="playlist">
+            <button id="buttonPlayAgain" style="display: none;">play again</button>
+        </div>
+
+        <button id="resetButton">🔄 ریست کردن گفتگو</button>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
+        let eventSource;
+        const micBtn = document.getElementById('micBtn');
+        const status = document.getElementById('status');
+        const statusBackground = document.getElementById('statusBackground');
+        const playlistDiv = document.getElementById('playlist');
+        const audioFileInput = document.getElementById('audioFile');
+        const sendFileBtn = document.getElementById('sendFileBtn');
+        const buttonPlayAgain = document.getElementById('buttonPlayAgain');
+        const resetButton = document.getElementById('resetButton');
+        let isPlaying = false;
+        let currentIndex = -1;
+
+        // تابع تغییر وضعیت با انیمیشن
+        function setStatus(text, state) {
+            status.textContent = text;
+            statusBackground.className = 'status-background ' + state;
+        }
+
+        sendFileBtn.addEventListener('click', () => {
+            audioFileInput.click();
+        });
+
+        audioFileInput.addEventListener('change', (e) => {
+            const selectedFile = e.target.files[0];
+            if (selectedFile) {
+                const renamedFile = new File([selectedFile], 'user_audio.mp3', {
+                    type: 'audio/mpeg'
+                });
+                const formData = new FormData();
+                formData.append('audio', renamedFile);
+                formData.append('language', document.getElementById('languageSelect').value);
+                formData.append('model', document.getElementById('modelSelect').value);
+                sendAudioStream(formData);
+                setStatus('در حال پردازش...', 'processing');
+            }
+        });
+
+        micBtn.addEventListener('click', async () => {
+            if (!isRecording) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: true
+                    });
+                    mediaRecorder = new MediaRecorder(stream);
+                    audioChunks = [];
+
+                    mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+                    mediaRecorder.onstop = () => {
+                        const audioBlob = new Blob(audioChunks, {
+                            type: 'audio/mpeg'
+                        });
+                        const formData = new FormData();
+                        formData.append('audio', audioBlob, 'user_audio.mp3');
+                        formData.append('language', document.getElementById('languageSelect').value);
+                        formData.append('model', document.getElementById('modelSelect').value);
+                        sendAudioStream(formData);
+                        setStatus('در حال پردازش...', 'processing');
+                    };
+
+                    mediaRecorder.start();
+                    isRecording = true;
+                    micBtn.classList.add('recording');
+                    micBtn.title = 'توقف رکورد';
+                    setStatus('در حال رکورد...', 'recording');
+                } catch (err) {
+                    setStatus('خطا در دسترسی به میکروفون: ' + err.message, 'ready');
+                }
+            } else {
+                mediaRecorder.stop();
+                isRecording = false;
+                micBtn.classList.remove('recording');
+                micBtn.title = 'شروع رکورد';
+            }
+        });
+
+        let audioPlaylist = [];
+        let receivedChunks = 0;
+        let totalChunks = 0;
+        let autoPlay = true;
+
+        function base64ToBlob(base64, mimeType = 'audio/mpeg') {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], {
+                type: mimeType
+            });
+        }
+
+        function playNext() {
+            if (currentIndex + 1 < audioPlaylist.length && !isPlaying) {
+                currentIndex++;
+                const audio = audioPlaylist[currentIndex];
+                audio.play().then(() => {
+                    isPlaying = true;
+                }).catch(err => {
+                    console.log('خطا در پخش:', err);
+                    isPlaying = false;
+                    playNext();
+                });
+            }
+        }
+
+        function onEnded() {
+            isPlaying = false;
+            playNext();
+        }
+
+        function addAudioToPlaylist(index, chunkText, audioB64) {
+            const blob = base64ToBlob(audioB64);
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url);
+            audio.controls = true;
+            audio.style.width = '100%';
+            audio.style.marginBottom = '5px';
+
+            audio.addEventListener('ended', onEnded);
+            audioPlaylist.push(audio);
+
+            const audioDiv = document.createElement('div');
+            const textSpan = document.createElement('span');
+            textSpan.textContent = chunkText;
+            audioDiv.appendChild(textSpan);
+            audioDiv.appendChild(audio);
+            playlistDiv.appendChild(audioDiv);
+
+            receivedChunks++;
+
+            if (autoPlay && !isPlaying) {
+                playNext();
+            }
+        }
+
+        function sendAudioStream(formData) {
+            fetch('/process_audio_stream', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('خطا در سرور: ' + response.statusText);
+                    }
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    function readStream() {
+                        reader.read().then(({
+                            done,
+                            value
+                        }) => {
+                            if (done) {
+                                setStatus('آماده برای رکورد...', 'ready');
+                                return;
+                            }
+                            buffer += decoder.decode(value, {
+                                stream: true
+                            });
+                            let lines = buffer.split('\n\n');
+                            buffer = lines.pop() || '';
+
+                            lines.forEach(line => {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(line.slice(6));
+                                        handleStreamData(data);
+                                    } catch (e) {
+                                        console.error('خطا در parse SSE:', e);
+                                    }
+                                }
+                            });
+
+                            readStream();
+                        }).catch(err => {
+                            setStatus('خطا در stream: ' + err.message, 'ready');
+                        });
+                    }
+
+                    readStream();
+                })
+                .catch(err => {
+                    setStatus('خطا: ' + err.message, 'ready');
+                });
+        }
+
+        function handleStreamData(data) {
+            if (data.type === 'start') {
+                totalChunks = data.total_chunks;
+                receivedChunks = 0;
+                audioPlaylist = [];
+                playlistDiv.innerHTML = '';
+                setStatus('شروع تولید پاسخ...', 'generating');
+                currentIndex = -1;
+                isPlaying = false;
+            } else if (data.type === 'audio_chunk') {
+                addAudioToPlaylist(data.index, data.chunk_text, data.audio_b64);
+            } else if (data.type === 'error_chunk') {
+                status.textContent += ` خطا در قطعه ${data.index}: ${data.message}`;
+            } else if (data.type === 'end') {
+                setStatus('آماده برای رکورد...', 'ready');
+                if (autoPlay && !isPlaying) {
+                    playNext();
+                }
+            } else if (data.error) {
+                setStatus('خطا: ' + data.error, 'ready');
+            }
+        }
+
+        resetButton.addEventListener('click', resetHistory);
+
+        async function resetHistory() {
+            console.log("در حال ریست کردن تاریخچه...");
+            setStatus("در حال ریست...", 'processing');
+
+            try {
+                const response = await fetch("/reset_history", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    console.log("تاریخچه ریست شد.");
+                    setStatus("آماده برای رکورد...", 'ready');
+                    playlistDiv.innerHTML = '';
+                } else {
+                    const error = await response.text();
+                    console.error("خطا:", response.status, error);
+                    setStatus("خطا در ریست.", 'ready');
+                }
+            } catch (err) {
+                console.error("خطای شبکه:", err);
+                setStatus("عدم ارتباط با سرور.", 'ready');
+            }
+        }
+    </script>
+</body>
+
+</html>

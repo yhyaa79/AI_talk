@@ -20,7 +20,7 @@ API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
 import requests
 import time
 
-def voice_to_text(input_binary, language=None, model_selekt="openai/whisper-large", filename="audio.mp3", sleep_time=1):
+def voice_to_text(input_binary, language=None, model_selekt="openai/whisper-large", filename="audio.mp3", sleep_time=2):
     print("...voice_to_text...")
     
     s = requests.Session()
@@ -85,7 +85,7 @@ def voice_to_text(input_binary, language=None, model_selekt="openai/whisper-larg
 # تابع LLM (از کد تو)
 
 
-def text_to_text(input_text, history=None, model="openai/gpt-3.5-turbo"):
+def text_to_text(input_text, history=None, model="openai/gpt-4o-mini"):
     """
     نسخه streaming از text_to_text با پشتیبانی از تاریخچه مکالمه.
     history: لیست دیکشنری‌های پیام‌های قبلی (هر کدام شامل role و content)
@@ -95,7 +95,7 @@ def text_to_text(input_text, history=None, model="openai/gpt-3.5-turbo"):
     # سیستم پرامپت پیش‌فرض
     system_prompt = {
         "role": "system",
-        "content": "You are a voice AI assistant and the output text is converted to audio, please use '.' to complete each sentence and do not write long sentences."
+        "content": "You are a voice model with a friendly, colloquial tone, each sentence should be 10-15 words long and end with a '.'."
     }
     
     # پیام کاربر جدید

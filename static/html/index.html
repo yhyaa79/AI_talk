@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>چت صوتی با AI</title>
+
+    <link rel="stylesheet" href="../static/css/styles.css">
+</head>
+
+<body class="bg-idle">
+    <div class="container">
+        <h1>🎙️ دستیار صوتی هوش مصنوعی</h1>
+        <p class="subtitle">با من صحبت کنید، من پاسخ می‌دهم</p>
+
+        <!-- Settings Toggle -->
+        <div class="settings-toggle">
+            <button class="settings-btn" id="settingsBtn">
+                ⚙️ تنظیمات
+            </button>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <!-- Microphone Area -->
+            <div class="mic-area state-idle" id="micArea">
+                <div class="status-animation">
+                    <div class="wave-circle"></div>
+                    <button class="mic-button" id="micBtn" title="شروع ضبط">
+                        <svg class="mic-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="status-text" id="statusText">آماده برای گفتگو</div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <button class="btn btn-file" id="sendFileBtn">
+                    📁 انتخاب فایل صوتی
+                </button>
+                <button class="btn btn-reset" id="resetButton">
+                    🔄 شروع مجدد
+                </button>
+            </div>
+            <input type="file" id="audioFile" accept="audio/*">
+
+            <!-- Transcript Area -->
+            <div class="transcript-area" id="transcriptArea">
+                <div class="empty-state">هنوز پیامی ارسال نشده است</div>
+            </div>
+            <button class="replay-button" id="replayButton" style="display: none;">
+                🔁 پخش مجدد همه
+            </button>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel hidden" id="settingsPanel">
+            <h2 style="color: #2d3748; margin-bottom: 20px; text-align: center;">⚙️ تنظیمات</h2>
+            <div class="setting-group">
+                <label for="languageSelect">زبان تشخیص:</label>
+                <select id="languageSelect">
+                    <option value="default" selected>خودکار</option>
+                    <option value="fa">فارسی</option>
+                    <option value="en">English</option>
+                </select>
+            </div>
+            <div class="setting-group">
+                <label for="modelSelect">مدل پردازش:</label>
+                <select id="modelSelect">
+                    <option value="tiny">سریع (Tiny)</option>
+                    <option value="small">کوچک (Small)</option>
+                    <option value="medium" selected>متوسط (Medium)</option>
+                    <option value="base">پایه (Base)</option>
+                    <option value="large">بزرگ (Large)</option>
+                </select>
+            </div>
+            <button class="settings-close" id="settingsClose">
+                ✓ ذخیره و بازگشت
+            </button>
+        </div>
+    </div>
+    <script src="../static/js/script.js"></script>
+</body>
+
+</html>

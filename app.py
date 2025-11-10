@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, jsonify, send_file, Response, session
+from flask import Flask, render_template, request, jsonify, send_file, Response, session, send_from_directory
 from utils import voice_to_text, text_to_text, text_to_auto
 from dotenv import load_dotenv
 from config import processing
@@ -56,7 +56,7 @@ def index():
         user_id = str(uuid.uuid4())
         session['user_id'] = user_id
         
-    return render_template('index.html')
+    return send_from_directory('static/html', 'index.html')
 
 
 @app.route('/reset_history', methods=['POST'])
@@ -103,7 +103,7 @@ def process_audio_stream():
         current_chunk = ""
         chunk_count = 0
         start_time = time.time()
-        sentence_enders = r'[.!؟؛]'  # الگوی پایان جمله (بدون \n برای split دقیق‌تر)
+        sentence_enders = r'[.؛]'  # الگوی پایان جمله (بدون \n برای split دقیق‌تر)
         
         yield f"data: {json.dumps({'type': 'start'})}\n\n"
 
@@ -128,7 +128,7 @@ def process_audio_stream():
             words_count = len(re.findall(r'\S+', current_chunk))
             has_sentence_end = bool(re.search(sentence_enders, current_chunk))
             
-            if words_count >= 6 and has_sentence_end:
+            if words_count >= 4 and has_sentence_end:
                 # Extract آخرین جمله کامل و remaining
                 complete_sentence, remaining = extract_last_complete_sentence(current_chunk, sentence_enders)
                 print(f'**Sentenced text:  {complete_sentence}')
