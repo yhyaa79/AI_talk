@@ -17,13 +17,26 @@ API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
 
 
 # تابع STT (از کد تو)
-def voice_to_text(input_binary, language, model_selekt, filename="audio.mp3", sleep_time=1):
+import requests
+import time
+
+def voice_to_text(input_binary, language=None, model_selekt="openai/whisper-large", filename="audio.mp3", sleep_time=1):
     print("...voice_to_text...")
+    
     s = requests.Session()
-    s.headers = {"Authorization": f"Bearer {API_KEY_AIMLAPI}"}
+    s.headers = {"Authorization": f"Bearer {API_KEY_AIMLAPI}"}  # مطمئن شو API_KEY_AIMLAPI تعریف شده باشه
     
     files = {"audio": (filename, input_binary, "audio/mpeg")}
-    data = {"model": model_selekt, "language": language}
+    
+    # data رو بر اساس زبان تنظیم کن
+    data = {
+        "model": model_selekt,
+        "detect_language": True  # فعال کردن تشخیص خودکار برای چندزبانه
+    }
+    
+    # اگر language مشخص شده، به عنوان hint اضافه کن (فقط یکی، مثلاً 'en' یا 'fa')
+    if language:
+        data["language"] = language  # مثلاً 'en' برای انگلیسی، 'fa' برای فارسی
     
     r = s.post("https://api.aimlapi.com/v1/stt/create", data=data, files=files, timeout=60)
     if r.status_code not in (200, 201):
@@ -55,8 +68,8 @@ def voice_to_text(input_binary, language, model_selekt, filename="audio.mp3", sl
             try:
                 result = info["result"]["results"]["channels"][0]["alternatives"][0]
                 text = result["transcript"]
-                lang = result.get("language", "نامشخص")
-                return {"text": text, "language": lang}
+                detected_lang = result.get("language", "نامشخص")  # زبان تشخیص‌داده‌شده رو برگردون
+                return {"text": text, "language": detected_lang}
             except (KeyError, IndexError, TypeError):
                 return None
         
@@ -67,7 +80,6 @@ def voice_to_text(input_binary, language, model_selekt, filename="audio.mp3", sl
         time.sleep(int(sleep_time))
     
     return None
-
 
 
 # تابع LLM (از کد تو)

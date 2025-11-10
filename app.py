@@ -74,16 +74,21 @@ def process_audio_stream():
         return jsonify({'error': 'هیچ فایلی ارسال نشده'}), 400
     
     audio_file = request.files['audio']
-    language = str(request.form.get('language'))
-    model = request.form.get('model')
+    
+    # فیکس: دیفالت برای model و language
+    model = request.form.get('model', 'large')  # دیفالت 'large' برای "#g1_whisper-large"
+    language = request.form.get('language')     # بدون str() – اگر None باشه، None می‌مونه
+    
+    if language == "default":
+        language = None
 
-    model_selekt = f"#g1_whisper-{model}"
+    model_selekt = f"#g1_whisper-{model}"  # حالا اگر model='large'، درست می‌شه
 
     if audio_file.filename == '':
         return jsonify({'error': 'فایل خالی است'}), 400
     
     input_binary = audio_file.read()
-    
+
     def generate():
         # گام 1: STT
         stt_result = voice_to_text(input_binary, language, model_selekt)
@@ -111,7 +116,7 @@ def process_audio_stream():
         history.append({"role": "user", "content": user_text})
         print(f"history::: {history}")
 
-        all_text = ''
+        all_text = []
 
         for llm_chunk in llm_stream:
             if not llm_chunk:
@@ -131,7 +136,8 @@ def process_audio_stream():
 
                 if complete_sentence.strip() and not complete_sentence == '.':  # اگر جمله خالی نبود
                     try:
-                        all_text.append(complete_sentence)
+                        if current_chunk.strip():
+                            all_text.append(current_chunk.strip())  # به لیست اضافه کن
                         
                         audio_binary = text_to_auto(complete_sentence)
                         
@@ -165,7 +171,8 @@ def process_audio_stream():
             if time.time() - start_time > 30:
                 break
 
-        history.append({"role": "assistant", "content": all_text})
+        full_response = ''.join(all_text)
+        history.append({"role": "assistant", "content": full_response})
         print(f"history::: {history}")
         print(f"/////all_text::: {all_text}")
 

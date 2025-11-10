@@ -1,19 +1,68 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>چت صوتی با AI</title>
     <style>
-        body { font-family: 'Tahoma', sans-serif; background: #f4f4f4; text-align: center; padding: 20px; }
-        .container { max-width: 400px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        #micBtn { font-size: 2em; background: #007bff; color: white; border: none; border-radius: 50%; width: 60px; height: 60px; cursor: pointer; margin: 10px; }
-        #micBtn.recording { background: #dc3545; }
-        #playBtn { font-size: 1.5em; background: #28a745; color: white; border: none; border-radius: 50%; width: 50px; height: 50px; cursor: pointer; margin: 10px; display: none; }
-        #status { margin: 20px 0; color: #666; }
-        audio { width: 100%; margin-top: 10px; }
+        body {
+            font-family: 'Tahoma', sans-serif;
+            background: #f4f4f4;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #micBtn {
+            font-size: 2em;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        #micBtn.recording {
+            background: #dc3545;
+        }
+
+        #playBtn {
+            font-size: 1.5em;
+            background: #28a745;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            cursor: pointer;
+            margin: 10px;
+            display: none;
+        }
+
+        #status {
+            margin: 20px 0;
+            color: #666;
+        }
+
+        audio {
+            width: 100%;
+            margin-top: 10px;
+        }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>چت صوتی با AI</h1>
@@ -24,8 +73,9 @@
         <div id="status">آماده برای رکورد...</div>
         <!-- جدید: المان انتخاب زبان -->
         <select id="languageSelect" style="margin: 10px; padding: 5px;">
+            <option value="default" selected>default</option>
             <option value="fa">فارسی</option>
-            <option value="en" selected>English</option>
+            <option value="en">English</option>
         </select>
 
         <select id="modelSelect" style="margin: 10px; padding: 5px;">
@@ -37,7 +87,8 @@
         </select>
 
         <!-- بخش streaming: لیست chunks که یکی یکی اضافه می‌شود -->
-        <div id="playlist" style="margin: 10px 0; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
+        <div id="playlist"
+            style="margin: 10px 0; max-height: 200px; overflow-y: auto; border: 1px solid #ccc; padding: 10px;">
             <!-- Audio elements will be appended here sequentially -->
         </div>
         <div>
@@ -49,7 +100,7 @@
         let mediaRecorder;
         let audioChunks = [];
         let isRecording = false;
-        let eventSource;  // برای SSE
+        let eventSource; // برای SSE
         const micBtn = document.getElementById('micBtn');
         const status = document.getElementById('status');
         const playlistDiv = document.getElementById('playlist');
@@ -67,31 +118,37 @@
         audioFileInput.addEventListener('change', (e) => {
             const selectedFile = e.target.files[0];
             if (selectedFile) {
-                const renamedFile = new File([selectedFile], 'user_audio.mp3', { type: 'audio/mpeg' });
+                const renamedFile = new File([selectedFile], 'user_audio.mp3', {
+                    type: 'audio/mpeg'
+                });
                 const formData = new FormData();
                 formData.append('audio', renamedFile);
-                sendAudioStream(formData);  // تغییر به stream
+                sendAudioStream(formData); // تغییر به stream
                 formData.append('language', document.getElementById('languageSelect').value);
                 formData.append('model', document.getElementById('modelSelect').value);
                 status.textContent = 'در حال پردازش فایل...';
             }
         });
-        
+
         micBtn.addEventListener('click', async () => {
             if (!isRecording) {
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        audio: true
+                    });
                     mediaRecorder = new MediaRecorder(stream);
                     audioChunks = [];
 
                     mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
                     mediaRecorder.onstop = () => {
-                        const audioBlob = new Blob(audioChunks, { type: 'audio/mpeg' });
+                        const audioBlob = new Blob(audioChunks, {
+                            type: 'audio/mpeg'
+                        });
                         const formData = new FormData();
                         formData.append('audio', audioBlob, 'user_audio.mp3');
                         formData.append('language', document.getElementById('languageSelect').value);
                         formData.append('model', document.getElementById('modelSelect').value);
-                        sendAudioStream(formData);  // تغییر به stream
+                        sendAudioStream(formData); // تغییر به stream
                     };
 
                     mediaRecorder.start();
@@ -115,84 +172,59 @@
         let audioPlaylist = [];
         let receivedChunks = 0;
         let totalChunks = 0;
-        let autoPlay = true;  // اگر بخواهید خودکار پخش شود
+        let autoPlay = true; // اگر بخواهید خودکار پخش شود
 
         // Function to base64 to blob (بدون تغییر)
-        function base64ToBlob(base64, mimeType = 'audio/mpeg') {  // تغییر mime به mpeg برای سازگاری
+        function base64ToBlob(base64, mimeType = 'audio/mpeg') { // تغییر mime به mpeg برای سازگاری
             const byteCharacters = atob(base64);
             const byteNumbers = new Array(byteCharacters.length);
             for (let i = 0; i < byteCharacters.length; i++) {
                 byteNumbers[i] = byteCharacters.charCodeAt(i);
             }
             const byteArray = new Uint8Array(byteNumbers);
-            return new Blob([byteArray], { type: mimeType });
+            return new Blob([byteArray], {
+                type: mimeType
+            });
         }
 
         // تابع پخش بعدی (جدید: بعد از تابع base64ToBlob)
         function playNext() {
-        if (currentIndex + 1 < audioPlaylist.length && !isPlaying) {
-            currentIndex++;
-            const audio = audioPlaylist[currentIndex];
-            audio.play().then(() => {
-            isPlaying = true;
-            }).catch(err => {
-            console.log('خطا در پخش:', err);
-            isPlaying = false; // در صورت خطا، ادامه بده
-            playNext(); // سعی مجدد برای بعدی
-            });
-        }
+            if (currentIndex + 1 < audioPlaylist.length && !isPlaying) {
+                currentIndex++;
+                const audio = audioPlaylist[currentIndex];
+                audio.play().then(() => {
+                    isPlaying = true;
+                }).catch(err => {
+                    console.log('خطا در پخش:', err);
+                    isPlaying = false; // در صورت خطا، ادامه بده
+                    playNext(); // سعی مجدد برای بعدی
+                });
+            }
         }
 
         // listener برای پایان پخش (جدید: بعد از playNext)
         function onEnded() {
-        isPlaying = false;
-        playNext(); // پخش بعدی را شروع کن
+            isPlaying = false;
+            playNext(); // پخش بعدی را شروع کن
         }
 
 
-        // Function to setup audio and append to playlist
-        // Function to setup audio and append to playlist (اصلاح‌شده)
+        // Function to setup audio and append to playlist (نسخه تمیز و بدون duplicate)
         function addAudioToPlaylist(index, chunkText, audioB64) {
-        const blob = base64ToBlob(audioB64);
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.controls = true;
-        audio.style.width = '100%';
-        audio.style.marginBottom = '5px';
-        
-        // listener برای ended (جایگزین listener قبلی؛ حالا global است)
-        audio.addEventListener('ended', onEnded);
-        
-        audioPlaylist.push(audio);
-        const audioDiv = document.createElement('div');
-        const textSpan = document.createElement('span');
-        textSpan.textContent = chunkText;
-        textSpan.style.display = 'block';
-        textSpan.style.fontSize = 'small';
-        textSpan.style.color = '#666';
-        audioDiv.appendChild(textSpan);
-        console.log(chunkText);
-        audioDiv.appendChild(audio);
-        playlistDiv.appendChild(audioDiv);
-        receivedChunks++;
-        
-        // جدید: اگر autoPlay فعال و چیزی پخش نمی‌شود، پخش بعدی را شروع کن
-        if (autoPlay && !isPlaying) {
-            playNext();
-        }
-        }
-            
-            // Listener برای ended (اگر دستی پخش شود)
-            audio.addEventListener('ended', () => {
-                if (autoPlay && receivedChunks < totalChunks) {
-                    // پخش بعدی اگر آماده باشد (اما چون sequential است، منتظر نمی‌ماند)
-                    const nextAudio = audioPlaylist[receivedChunks];
-                    if (nextAudio) nextAudio.play();
-                }
-            });
-            
+            const blob = base64ToBlob(audioB64);
+            const url = URL.createObjectURL(blob);
+            const audio = new Audio(url); // local: هر بار جدید
+            audio.controls = true;
+            audio.style.width = '100%';
+            audio.style.marginBottom = '5px';
+
+            // listener: داخل تابع و به onEnded وصل
+            audio.addEventListener('ended', onEnded);
+
+            // push: داخل تابع، بعد از تعریف
             audioPlaylist.push(audio);
-            
+
+            // div: داخل تابع
             const audioDiv = document.createElement('div');
             const textSpan = document.createElement('span');
             textSpan.textContent = chunkText;
@@ -203,64 +235,77 @@
             audioDiv.appendChild(textSpan);
             audioDiv.appendChild(audio);
             playlistDiv.appendChild(audioDiv);
-            
+
             receivedChunks++;
-        
+
+            // auto-play
+            if (autoPlay && !isPlaying) {
+                playNext();
+            }
+        }
+
+
+
 
         // تابع ارسال با streaming (SSE)
         function sendAudioStream(formData) {
             // ابتدا POST برای شروع stream (SSE از endpoint جدید)
             fetch('/process_audio_stream', {
-                method: 'POST',
-                body: formData
-            })
-            .then(response => {
-                if (!response.ok) {
-                    throw new Error('خطا در سرور: ' + response.statusText);
-                }
-                // SSE را از response بخوان (چون SSE با fetch مستقیم کار نمی‌کند، از EventSource استفاده کنید)
-                // نکته: برای SSE با body، از EventSource سفارشی استفاده کنید یا proxy ساده
-                // اینجا فرض می‌کنیم endpoint SSE بدون body اضافی است؛ برای body، ابتدا POST کنید و ID بگیرید
-                // ساده‌سازی: فرض کنید SSE endpoint جدید بدون body است، اما برای audio، ابتدا POST و ID بگیرید
-                
-                // گام موقت: POST برای ID، سپس SSE با ID
-                // اما برای سادگی، فرض کنیم endpoint SSE body را handle می‌کند و response stream برمی‌گرداند
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let buffer = '';
-                
-                function readStream() {
-                    reader.read().then(({ done, value }) => {
-                        if (done) {
-                            status.textContent = 'پردازش تمام شد!';
-                            return;
-                        }
-                        buffer += decoder.decode(value, { stream: true });
-                        let lines = buffer.split('\n\n');
-                        buffer = lines.pop() || '';  // آخرین ناقص را نگه دارید
-                        
-                        lines.forEach(line => {
-                            if (line.startsWith('data: ')) {
-                                try {
-                                    const data = JSON.parse(line.slice(6));
-                                    handleStreamData(data);
-                                } catch (e) {
-                                    console.error('خطا در parse SSE:', e);
-                                }
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('خطا در سرور: ' + response.statusText);
+                    }
+                    // SSE را از response بخوان (چون SSE با fetch مستقیم کار نمی‌کند، از EventSource استفاده کنید)
+                    // نکته: برای SSE با body، از EventSource سفارشی استفاده کنید یا proxy ساده
+                    // اینجا فرض می‌کنیم endpoint SSE بدون body اضافی است؛ برای body، ابتدا POST کنید و ID بگیرید
+                    // ساده‌سازی: فرض کنید SSE endpoint جدید بدون body است، اما برای audio، ابتدا POST و ID بگیرید
+
+                    // گام موقت: POST برای ID، سپس SSE با ID
+                    // اما برای سادگی، فرض کنیم endpoint SSE body را handle می‌کند و response stream برمی‌گرداند
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    function readStream() {
+                        reader.read().then(({
+                            done,
+                            value
+                        }) => {
+                            if (done) {
+                                status.textContent = 'پردازش تمام شد!';
+                                return;
                             }
+                            buffer += decoder.decode(value, {
+                                stream: true
+                            });
+                            let lines = buffer.split('\n\n');
+                            buffer = lines.pop() || ''; // آخرین ناقص را نگه دارید
+
+                            lines.forEach(line => {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(line.slice(6));
+                                        handleStreamData(data);
+                                    } catch (e) {
+                                        console.error('خطا در parse SSE:', e);
+                                    }
+                                }
+                            });
+
+                            readStream();
+                        }).catch(err => {
+                            status.textContent = 'خطا در stream: ' + err.message;
                         });
-                        
-                        readStream();
-                    }).catch(err => {
-                        status.textContent = 'خطا در stream: ' + err.message;
-                    });
-                }
-                
-                readStream();
-            })
-            .catch(err => {
-                status.textContent = 'خطا: ' + err.message;
-            });
+                    }
+
+                    readStream();
+                })
+                .catch(err => {
+                    status.textContent = 'خطا: ' + err.message;
+                });
         }
 
         // Handle data از stream
@@ -278,10 +323,10 @@
             } else if (data.type === 'error_chunk') {
                 status.textContent += ` خطا در قطعه ${data.index}: ${data.message}`;
             } else if (data.type === 'end') {
-            status.textContent = 'پاسخ کامل شد!';
-            if (autoPlay && !isPlaying) {
-                playNext(); // جدید: شروع پخش از اول اگر هنوز شروع نشده
-            }
+                status.textContent = 'پاسخ کامل شد!';
+                if (autoPlay && !isPlaying) {
+                    playNext(); // جدید: شروع پخش از اول اگر هنوز شروع نشده
+                }
             } else if (data.error) {
                 status.textContent = 'خطا: ' + data.error;
             }
@@ -315,7 +360,7 @@
                 status.textContent = "عدم ارتباط با سرور.";
             }
         }
-
     </script>
 </body>
+
 </html>
