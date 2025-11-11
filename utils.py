@@ -20,7 +20,7 @@ API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
 import requests
 import time
 
-def voice_to_text(input_binary, language=None, model_selekt="openai/whisper-large", filename="audio.mp3", sleep_time=2):
+def voice_to_text(input_binary, language=None, model_selekt="openai/whisper-large", filename="audio.mp3", sleep_time=5):
     print("...voice_to_text...")
     
     s = requests.Session()

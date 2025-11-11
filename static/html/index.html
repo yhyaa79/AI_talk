@@ -7,36 +7,102 @@
     <title>چت صوتی با AI</title>
 
     <link rel="stylesheet" href="../static/css/styles.css">
+    <style>
+
+.status-animation {
+    width: 400px;
+    height: 200px;
+    position: relative;
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+.viz-item {
+    position: absolute;
+    width: 35px;
+    height: 35px;
+    background: #000;
+    border-radius: 50%;
+    left: calc(90px + var(--i, 0) * 50px);
+    top: 90px;
+    transform: scale(1) translateY(0);
+    transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+.status-text {
+    text-align: center;
+    color: #4a5568;
+    font-size: 16px;
+    font-weight: 500;
+    min-height: 24px;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.status-text.fade {
+    opacity: 0;
+    transform: translateY(-10px);
+}
+
+/* Idle: Static horizontal circles */
+.mic-area.state-idle .viz-item {
+    transform: scale(1) translateY(0);
+}
+
+/* Recording: Merge to center and pulse via parent scale */
+.mic-area.state-recording .viz-item {
+    left: 190px;
+    top: 90px;
+    width: 55px;
+    height: 55px;
+    transform: scale(1) translateY(0);
+    transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform 0.3s ease-out;
+}
+
+.mic-area.state-recording .status-animation {
+    transform: scale(var(--vol, 1));
+    transform-origin: center;
+    transition: transform 0.08s linear;
+}
+
+/* Processing: Disperse then sequential jump loading */
+.mic-area.state-processing .viz-item {
+    animation: loadingJump 0.8s ease-in-out infinite;
+    animation-delay: calc(var(--i, 0) * 0.15s);
+    transform: scale(1) translateY(0);
+    transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+
+@keyframes loadingJump {
+    0% {
+        transform: translateY(0) scale(1);
+    }
+    50% {
+        transform: translateY(-40px) scale(1.1);
+    }
+    100% {
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* Generating: Disperse with per-circle audio-reactive vertical pull */
+.mic-area.state-generating .viz-item {
+    transform: translateY(var(--offset, 0px)) scale(1);
+    transition: transform 0.08s linear;
+}
+
+
+
+    </style>
 </head>
 
 <body class="bg-idle">
-    <div class="container">
-        <h1>🎙️ دستیار صوتی هوش مصنوعی</h1>
-        <p class="subtitle">با من صحبت کنید، من پاسخ می‌دهم</p>
-
         <!-- Settings Toggle -->
         <div class="settings-toggle">
-            <button class="settings-btn" id="settingsBtn">
-                ⚙️ تنظیمات
-            </button>
-        </div>
-
-        <!-- Main Content -->
-        <div class="main-content" id="mainContent">
-            <!-- Microphone Area -->
-            <div class="mic-area state-idle" id="micArea">
-                <div class="status-animation">
-                    <div class="wave-circle"></div>
-                    <button class="mic-button" id="micBtn" title="شروع ضبط">
-                        <svg class="mic-icon" xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px"
-                            fill="#FFFFFF">
-                            <path d="M480-415.33q-45.33 0-76.33-32.28t-31-78.39v-247.33q0-44.45 31.29-75.56 31.3-31.11 76-31.11 44.71 0 76.04 31.11 31.33 31.11 31.33 75.56V-526q0 46.11-31 78.39T480-415.33Zm0-232ZM446.67-120v-131.67q-105.34-12-176-90.33Q200-420.33 200-526h66.67q0 88.33 62.36 149.17Q391.38-316 479.86-316q88.47 0 150.97-60.83 62.5-60.84 62.5-149.17H760q0 105.67-70.67 184-70.66 78.33-176 90.33V-120h-66.66ZM480-482q17.67 0 29.17-12.83 11.5-12.84 11.5-31.17v-247.33q0-17-11.69-28.5-11.7-11.5-28.98-11.5t-28.98 11.5q-11.69 11.5-11.69 28.5V-526q0 18.33 11.5 31.17Q462.33-482 480-482Z" />
-                        </svg>
-                    </button>
-                </div>
-                <div class="status-text" id="statusText">آماده برای گفتگو</div>
-            </div>
-
             <!-- Action Buttons -->
             <div class="action-buttons">
                 <button class="btn btn-file" id="sendFileBtn">
@@ -46,15 +112,32 @@
                     🔄 شروع مجدد
                 </button>
             </div>
-            <input type="file" id="audioFile" accept="audio/*">
 
-            <!-- Transcript Area -->
-            <div class="transcript-area" id="transcriptArea">
-                <div class="empty-state">هنوز پیامی ارسال نشده است</div>
-            </div>
-            <button class="replay-button" id="replayButton" style="display: none;">
-                🔁 پخش مجدد همه
+            <button class="settings-btn" id="settingsBtn">تنظیمات</button>
+        </div>
+
+        
+    <div class="container" id="container">
+
+        <!-- Main Content -->
+        <div class="main-content" id="mainContent">
+            <!-- Microphone Area -->
+            <button id="micBtn" style="background-color: #ffffff00; border: none;">
+                <div class="mic-area state-idle" id="micArea">
+                    <div class="status-animation" id="statusAnimation">
+                        <div class="viz-item" style="--i: 0"></div>
+                        <div class="viz-item" style="--i: 1"></div>
+                        <div class="viz-item" style="--i: 2"></div>
+                        <div class="viz-item" style="--i: 3"></div>
+                        <div class="viz-item" style="--i: 4"></div>
+                    </div>
+                </div>
             </button>
+            <button id="openBottom"><svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000"><path d="M480-344 240-584l47.33-47.33L480-438.67l192.67-192.66L720-584 480-344Z"/></svg></button>
+
+            <div class="status-text" id="statusText">آماده برای گفتگو</div>
+            <input type="file" id="audioFile" accept="audio/*">
+            <button class="replay-button" id="replayButton">🔁 پخش مجدد همه</button>
         </div>
 
         <!-- Settings Panel -->

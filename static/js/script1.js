@@ -19,10 +19,8 @@ const modelSelectLLM = document.getElementById('modelSelectLLM');
 const toneSelectSTT = document.getElementById('toneSelectSTT');
 const modelSelectTTS = document.getElementById('modelSelectTTS');
 const nameVoiceSelectTTS = document.getElementById('nameVoiceSelectTTS');
-const statusAnimation = document.getElementById('statusAnimation'); 
-const openBottom = document.getElementById('openBottom');
-const closeBottom = document.getElementById('closeBottom');
-const container = document.getElementById('container');
+
+let statusAnimation = document.getElementById('statusAnimation'); // Added reference
 
 let isPlaying = false;
 let currentIndex = -1;
@@ -68,7 +66,7 @@ function updateInputViz() {
         sum += val * val;
     }
     const rms = Math.sqrt(sum / dataArray.length);
-    const vol = 0.8 + (rms * 1.8); // Tuned for subtle to prominent pulsing (0.8-2.6 scale)
+    const vol = 1.5 + (rms * 3); // Tuned for subtle to prominent pulsing (0.8-2.6 scale)
     statusAnimation.style.setProperty('--vol', vol);
 }
 
@@ -84,7 +82,6 @@ function updateOutputViz() {
     const bands = 5;
     const bandWidth = Math.floor(freqData.length / bands);
     const vizItems = document.querySelectorAll('.status-animation .viz-item');
-    
     for (let i = 0; i < bands; i++) {
         let sum = 0;
         const start = i * bandWidth;
@@ -93,24 +90,13 @@ function updateOutputViz() {
             sum += freqData[j];
         }
         const avg = sum / (end - start) / 255;
-        
-        // تغییر ارتفاع - از 35px تا 175px (5 برابر)
-        const baseHeight = 35; // ارتفاع پایه
-        const maxHeight = baseHeight * 5; // حداکثر ارتفاع (175px)
-        const height = baseHeight + (avg * (maxHeight - baseHeight));
-        
-        vizItems[i].style.width = '35px'; // عرض ثابت
-        vizItems[i].style.height = `${height}px`; // ارتفاع متغیر
-        vizItems[i].style.borderRadius = '17.5px'; // شکل ستونی با گوشه‌های گرد
-        
-        // برای رشد از مرکز، جابجایی عمودی را تنظیم می‌کنیم
-        // وقتی ارتفاع افزایش می‌یابد، باید نصف تفاوت را به بالا جابجا کنیم
-        const heightDiff = height - baseHeight;
-        const offset = -(heightDiff / 2);
-        
-        vizItems[i].style.transform = `translateY(${offset}px)`;
+        // کشیده شدن عمودی (ارتفاع) برای شبیه شدن به لوگوی صوت
+        const height = 20 + (avg * 80); // ارتفاع از 20px تا 100px
+        vizItems[i].style.height = `${height}px`;
+        vizItems[i].style.borderRadius = '10px'; // تغییر از دایره به مستطیل گرد
     }
 }
+
 
 // مقدار های توی سلکت nameVoiceSelectTTS
 modelSelectTTS.addEventListener('change', () => {
@@ -362,14 +348,21 @@ function playNext() {
     if (currentIndex + 1 < audioPlaylist.length && !isPlaying) {
         currentIndex++;
         const audio = audioPlaylist[currentIndex];
+        
+        // اتصال به audioContext قبل از پخش
+        initAudioViz(); // اطمینان از ایجاد audioContext
+        
         audio.play().then(() => {
             isPlaying = true;
+            
+            // اتصال audio به analyser برای visualization
             if (source) {
-                source.disconnect();  // قطع اتصال قبلی (خوب نگهش دار)
+                source.disconnect();
             }
             source = audioContext.createMediaElementSource(audio);
-            source.connect(analyser);  // برای ویژوالیزیشن
-            source.connect(audioContext.destination);  // ← این خط رو اضافه کن (برای پخش صدا)
+            source.connect(analyser);
+            analyser.connect(audioContext.destination); // اضافه شده: اتصال به destination برای پخش صدا
+            
             if (!outputVizInterval) {
                 startOutputViz();
             }
@@ -398,6 +391,10 @@ function addAudioToPlaylist(index, chunkText, audioB64) {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
     audio.addEventListener('ended', onEnded);
+    
+    // حذف crossOrigin که باعث مشکل می‌شود
+    // audio.crossOrigin = "anonymous"; // این خط را حذف کنید اگر وجود دارد
+    
     audioPlaylist.push(audio);
 
     // Add to transcript
@@ -438,6 +435,7 @@ function addAudioToPlaylist(index, chunkText, audioB64) {
 
     scrollToBottom();
 }
+
 
 function sendAudioStream(formData) {
     fetch('/process_audio_stream', {
@@ -559,36 +557,4 @@ replayButton.addEventListener('click', () => {
     isPlaying = false;
     allAudiosFinished = false;
     playNext();
-});
-
-
-let isFirstClick = true; // متغیر برای ردیابی وضعیت کلیک
-
-openBottom.addEventListener('click', () => {
-    if (isFirstClick) {
-        // اول minHeight را تغییر می‌دهیم تا انیمیشن اجرا شود
-        container.style.minHeight = '550px';
-        
-        // بعد از اتمام انیمیشن (فرض بر این است که transition روی minHeight تعریف شده)، المان‌ها را نمایش می‌دهیم
-        container.addEventListener('transitionend', function showElements() {
-            statusText.style.display = 'grid';
-            audioFile.style.display = 'grid';
-            replayButton.style.display = 'flex';
-            // برای جلوگیری از اجرای مجدد، listener را حذف می‌کنیم
-            container.removeEventListener('transitionend', showElements);
-        }, { once: true }); // once: true برای اجرای یک‌بار
-        
-        openBottom.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000"><path d="M480-545.33 287.33-352.67 240-400l240-240 240 240-47.33 47.33L480-545.33Z"/></svg>';
-    } else {
-        // اول المان‌ها را مخفی می‌کنیم
-        statusText.style.display = 'none';
-        audioFile.style.display = 'none';
-        replayButton.style.display = 'none';
-        
-        // بعد minHeight را تغییر می‌دهیم
-        container.style.minHeight = '300px';
-        
-        openBottom.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000"><path d="M480-344 240-584l47.33-47.33L480-438.67l192.67-192.66L720-584 480-344Z"/></svg>';
-    }
-    isFirstClick = !isFirstClick; // تغییر وضعیت کلیک
 });
