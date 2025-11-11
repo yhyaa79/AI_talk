@@ -28,9 +28,9 @@
                 <div class="status-animation">
                     <div class="wave-circle"></div>
                     <button class="mic-button" id="micBtn" title="شروع ضبط">
-                        <svg class="mic-icon" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                        <svg class="mic-icon" xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px"
+                            fill="#FFFFFF">
+                            <path d="M480-415.33q-45.33 0-76.33-32.28t-31-78.39v-247.33q0-44.45 31.29-75.56 31.3-31.11 76-31.11 44.71 0 76.04 31.11 31.33 31.11 31.33 75.56V-526q0 46.11-31 78.39T480-415.33Zm0-232ZM446.67-120v-131.67q-105.34-12-176-90.33Q200-420.33 200-526h66.67q0 88.33 62.36 149.17Q391.38-316 479.86-316q88.47 0 150.97-60.83 62.5-60.84 62.5-149.17H760q0 105.67-70.67 184-70.66 78.33-176 90.33V-120h-66.66ZM480-482q17.67 0 29.17-12.83 11.5-12.84 11.5-31.17v-247.33q0-17-11.69-28.5-11.7-11.5-28.98-11.5t-28.98 11.5q-11.69 11.5-11.69 28.5V-526q0 18.33 11.5 31.17Q462.33-482 480-482Z" />
                         </svg>
                     </button>
                 </div>
@@ -60,24 +60,94 @@
         <!-- Settings Panel -->
         <div class="settings-panel hidden" id="settingsPanel">
             <h2 style="color: #2d3748; margin-bottom: 20px; text-align: center;">⚙️ تنظیمات</h2>
-            <div class="setting-group">
-                <label for="languageSelect">زبان تشخیص:</label>
-                <select id="languageSelect">
-                    <option value="default" selected>خودکار</option>
-                    <option value="fa">فارسی</option>
-                    <option value="en">English</option>
-                </select>
+            <div class="STT">
+                <h4>STT</h4>
+                <div class="setting-group">
+                    <label for="languageSelect">زبان تشخیص:</label>
+                    <select id="languageSelect">
+                        <option value="default" selected>خودکار</option>
+                        <option value="fa">فارسی</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="modelSelectSTT">مدل پردازش:</label>
+                    <select id="modelSelectSTT">
+                        <option value="tiny">سریع (Tiny)</option>
+                        <option value="small">کوچک (Small)</option>
+                        <option value="medium" selected>متوسط (Medium)</option>
+                        <option value="base">پایه (Base)</option>
+                        <option value="large">بزرگ (Large)</option>
+                    </select>
+                </div>
+            </div>  
+
+            <div class="LLM">
+                <h4>LLM</h4>
+                <div class="setting-group">
+                    <label for="modelSelectLLM">مدل پردازش:</label>
+                    <select id="modelSelectLLM">
+                        <option value="openai/gpt-5-nano">gpt-5-nano</option>
+                        <option value="openai/gpt-4o-mini">gpt-4o-mini</option>
+                        <option value="openai/gpt-3.5-turbo" selected>gpt-3.5-turbo</option>
+                        <option value="anthropic/claude-3.5-sonnet">claude-3.5-sonnet</option>
+                        <option value="google/gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
+                        <option value="google/gemini-2.5-flash">gemini-2.5-flash</option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                    </select>
+                </div>
+                    <div class="setting-group">
+                    <label for="toneSelectSTT">لحن پاسخ:</label>
+                    <select id="toneSelectSTT">
+                        <option value="official">رسمی</option>
+                        <option value="friendly" selected>دوستانه</option>
+                        <option value="professional">حرفه ای </option>
+                        <option value="Humorous">طنزآمیز</option>
+                        <option value="Decisive">قاطع</option>
+                    </select>
+                </div>
             </div>
-            <div class="setting-group">
-                <label for="modelSelect">مدل پردازش:</label>
-                <select id="modelSelect">
-                    <option value="tiny">سریع (Tiny)</option>
-                    <option value="small">کوچک (Small)</option>
-                    <option value="medium" selected>متوسط (Medium)</option>
-                    <option value="base">پایه (Base)</option>
-                    <option value="large">بزرگ (Large)</option>
-                </select>
+            
+            <div class="TTS"> 
+                <h4>TTS</h4>
+                <div class="setting-group">
+                    <label for="modelSelectTTS">مدل پردازش:</label>
+                    <select id="modelSelectTTS">
+                        <option value="elevenlabs/v3_alpha" selected>elevenlabs/v3_alpha</option>
+                        <option value="minimax/speech-2.6-hd">minimax/speech-2.6-hd</option>
+                        <option value="openai/tts-1-hd">openai/tts-1-hd</option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                        <option value=""></option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label for="nameVoiceSelectTTS">صدای گوینده:</label>
+                    <select id="nameVoiceSelectTTS">
+                        <option value="Alice">Alice</option>
+                        <option value="bb" selected>bb</option>
+                        <option value="cc">cc</option>
+    
+                    </select>
+                </div>
             </div>
+
             <button class="settings-close" id="settingsClose">
                 ✓ ذخیره و بازگشت
             </button>

@@ -76,13 +76,17 @@ def process_audio_stream():
     audio_file = request.files['audio']
     
     # فیکس: دیفالت برای model و language
-    model = request.form.get('model', 'large')  # دیفالت 'large' برای "#g1_whisper-large"
-    language = request.form.get('language')     # بدون str() – اگر None باشه، None می‌مونه
+    modelSTT = request.form.get('modelSTT', 'large')  # دیفالت 'large' برای "#g1_whisper-large"
+    language = request.form.get('language', "default")     # بدون str() – اگر None باشه، None می‌مونه
+    modelLLM = request.form.get('modelLLM', 'openai/gpt-3.5-turbo')
+    toneLLM = request.form.get('toneLLM', 'friendly')
+    modelTTS = request.form.get('modelTTS', 'elevenlabs/v3_alpha')
+    nameVoiceTTS = request.form.get('nameVoiceTTS', 'Alice')
     
     if language == "default":
         language = None
 
-    model_selekt = f"#g1_whisper-{model}"  # حالا اگر model='large'، درست می‌شه
+    model_selekt = f"#g1_whisper-{modelSTT}"  # حالا اگر model='large'، درست می‌شه
 
     if audio_file.filename == '':
         return jsonify({'error': 'فایل خالی است'}), 400
@@ -110,7 +114,7 @@ def process_audio_stream():
 
 
 
-        llm_stream = text_to_text(user_text, history)
+        llm_stream = text_to_text(user_text, history, modelLLM, toneLLM)
         
         # پیام کاربر را اول اضافه کن
         history.append({"role": "user", "content": user_text})
@@ -139,7 +143,7 @@ def process_audio_stream():
                         if current_chunk.strip():
                             all_text.append(current_chunk.strip())  # به لیست اضافه کن
                         
-                        audio_binary = text_to_auto(complete_sentence)
+                        audio_binary = text_to_auto(complete_sentence, modelTTS, nameVoiceTTS)
                         
                         if not audio_binary or len(audio_binary) == 0:
                             yield f"data: {json.dumps({'type': 'error_chunk', 'index': chunk_count, 'message': 'خطا در TTS'})}\n\n"

@@ -85,7 +85,7 @@ def voice_to_text(input_binary, language=None, model_selekt="openai/whisper-larg
 # تابع LLM (از کد تو)
 
 
-def text_to_text(input_text, history=None, model="openai/gpt-4o-mini"):
+def text_to_text(input_text, history=None, model="openai/gpt-4o-mini", toneLLM="friendly"):
     """
     نسخه streaming از text_to_text با پشتیبانی از تاریخچه مکالمه.
     history: لیست دیکشنری‌های پیام‌های قبلی (هر کدام شامل role و content)
@@ -95,7 +95,7 @@ def text_to_text(input_text, history=None, model="openai/gpt-4o-mini"):
     # سیستم پرامپت پیش‌فرض
     system_prompt = {
         "role": "system",
-        "content": "You are a voice model with a friendly, colloquial tone, each sentence should be 10-15 words long and end with a '.'."
+        "content": f"You are a voice model with a {toneLLM}, colloquial tone, each sentence should be 10-15 words long and end with a '.'."
     }
     
     # پیام کاربر جدید
