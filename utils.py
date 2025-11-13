@@ -6,85 +6,67 @@ import requests
 import json
 import io
 import logging
+import re
 
-load_dotenv()                    # ← .env رو می‌خونه
+load_dotenv()
 API_KEY_OPENROUTER = os.getenv("API_KEY_OPENROUTER")
 API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
-
-
-######## fert step #########
+API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 
 
 
-# تابع STT (از کد تو)
-import requests
-import time
+# =======================
+# تابع STT بهینه‌شده
+# =======================
 
-def voice_to_text(input_binary, language=None, model_selekt="openai/whisper-large", filename="audio.mp3", sleep_time=5):
-    print("...voice_to_text...")
+def voice_to_text(input_binary, language=None, model_selekt="whisper-1", filename="audio.mp3"):
+    """
+    Optimized voice-to-text using OpenAI Whisper API.
+    Note: OpenAI Whisper uses a single model 'whisper-1'. The model_selekt parameter is ignored.
+    This function transcribes the audio to text in the original language without translation.
+    If language is specified, it forces the transcription in that language.
+    If not specified, Whisper auto-detects the language and transcribes accordingly.
+    """
     
-    s = requests.Session()
-    s.headers = {"Authorization": f"Bearer {API_KEY_AIMLAPI}"}  # مطمئن شو API_KEY_AIMLAPI تعریف شده باشه
+    # OpenAI API endpoint and key (replace with your actual key)
+    API_URL = "https://api.openai.com/v1/audio/transcriptions"
     
-    files = {"audio": (filename, input_binary, "audio/mpeg")}
-    
-    # data رو بر اساس زبان تنظیم کن
-    data = {
-        "model": model_selekt,
-        "detect_language": True  # فعال کردن تشخیص خودکار برای چندزبانه
+    headers = {
+        "Authorization": f"Bearer {API_KEY_OPENAI}"  # فرض بر این است که API_KEY_OPENAI تعریف شده باشد
     }
     
-    # اگر language مشخص شده، به عنوان hint اضافه کن (فقط یکی، مثلاً 'en' یا 'fa')
+    files = {"file": (filename, input_binary, "audio/mpeg")}
+    data = {
+        "model": model_selekt,
+        "response_format": "json",
+    }
+    
     if language:
-        data["language"] = language  # مثلاً 'en' برای انگلیسی، 'fa' برای فارسی
+        data["language"] = language  # اصلاح: زبان ورودی را مستقیماً پاس می‌دهیم، نه 'en'
     
-    r = s.post("https://api.aimlapi.com/v1/stt/create", data=data, files=files, timeout=60)
-    if r.status_code not in (200, 201):
-        return None
+    # اگر language مشخص نشود، Whisper خودش زبان را تشخیص می‌دهد و بدون ترجمه ترانسکریپت می‌کند
     
-    response_create = r.json()
-    gen_id = response_create.get("generation_id")
-    if not gen_id:
-        return None
-    
-    poll_url = f"https://api.aimlapi.com/v1/stt/{gen_id}"
-    start_time = time.time()
-    timeout = 300
-    
-    while time.time() - start_time < timeout:
-        poll_resp = s.get(poll_url, timeout=30)
-        if poll_resp.status_code != 200:
-            time.sleep(int(sleep_time))
-            continue
+    try:
+        r = requests.post(API_URL, headers=headers, files=files, data=data, timeout=60)
         
-        info = poll_resp.json()
-        status = info.get("status")
-        
-        if status in ("waiting", "active"):
-            time.sleep(int(sleep_time))
-            continue
-        
-        if status == "completed":
-            try:
-                result = info["result"]["results"]["channels"][0]["alternatives"][0]
-                text = result["transcript"]
-                detected_lang = result.get("language", "نامشخص")  # زبان تشخیص‌داده‌شده رو برگردون
-                return {"text": text, "language": detected_lang}
-            except (KeyError, IndexError, TypeError):
-                return None
-        
-        if status == "failed":
-            print(f"Failed: {info}")
+        if r.status_code not in (200, 201):
             return None
         
-        time.sleep(int(sleep_time))
+        response = r.json()
+        text = response.get("text", "")
+        
+        if not text:
+            return None
+        
+        return {"text": text}  # Return a dict similar to parse_stt_result for compatibility
     
-    return None
+    except Exception as e:
+        print(f'error: {e}')
+        return None
 
-
-# تابع LLM (از کد تو)
-
-
+# =======================
+# تابع LLM بهینه‌شده با Groq (سریع‌ترین)
+# =======================
 def text_to_text(input_text, history=None, model="openai/gpt-4o-mini", toneLLM="friendly"):
     """
     نسخه streaming از text_to_text با پشتیبانی از تاریخچه مکالمه.
@@ -162,181 +144,63 @@ def text_to_text(input_text, history=None, model="openai/gpt-4o-mini", toneLLM="
         yield current_chunk
 
 
-# تابع TTS (از کد تو)
-def text_to_auto(input_text, model="elevenlabs/v3_alpha", name_voice="Alice"):
-    print("...text_to_auto...")
-    url = "https://api.aimlapi.com/v1/tts"
-    headers = {
-        "Authorization": f"Bearer {API_KEY_AIMLAPI}",
-    }
+# =======================
+# تابع TTS بهینه‌شده
+# =======================
 
+
+def text_to_audio(input_text, model="tts-1", voice="alloy"):
+    """
+    TTS بهینه‌شده با استفاده از OpenAI API.
+    Note: مدل پیش‌فرض 'tts-1' است. صداها: alloy, echo, fable, onyx, nova, shimmer.
+    """
+    print(f"...text_to_audio: {input_text[:30]}...")
+    
+    # چک کردن voice و تنظیم پیش‌فرض معتبر
+    valid_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
+    if not voice or voice not in valid_voices:
+        voice = "alloy"
+    
+    url = "https://api.openai.com/v1/audio/speech"
+    headers = {"Authorization": f"Bearer {API_KEY_OPENAI}"}  # کلید API رو جایگزین کن
     payload = {
         "model": model,
-        "text": input_text,
-        "voice": name_voice
-    }
-    response = requests.post(url, headers=headers, json=payload, stream=True)
-    audio_bytes = io.BytesIO()
-    for chunk in response.iter_content(chunk_size=8192):
-        if chunk:
-            audio_bytes.write(chunk)
-    audio_bytes.seek(0)
-    return audio_bytes.getvalue()
-
-
-
-
-
-
-
-
-""" def voice_to_text(input_binary, filename="audio.mp3", model="#g1_whisper-medium", language='en', sleep_time=2):
-    s = requests.Session()
-    s.headers = {"Authorization": f"Bearer {API_KEY_AIMLAPI}"}
-    
-    # فرض کنیم داده باینری MP3 هست
-    files = {"audio": (filename, input_binary, "audio/mpeg")}
-    data = {"model": model, "language": language}  # اصلاح: زبان فارسی اضافه شد
-    
-    r = s.post(f"{BASE_URL}/stt/create", data=data, files=files, timeout=60)
-    if r.status_code not in (200, 201):
-        return None
-    
-    response_create = r.json()
-    gen_id = response_create.get("generation_id")
-    if not gen_id:
-        return None
-    
-    poll_url = f"{BASE_URL}/stt/{gen_id}"
-    start_time = time.time()
-    timeout = 300  # 5 دقیقه
-    
-    while time.time() - start_time < timeout:
-        poll_resp = s.get(poll_url, timeout=30)
-        if poll_resp.status_code != 200:
-            time.sleep(int(sleep_time))
-            continue
-        
-        info = poll_resp.json()
-        status = info.get("status")
-        
-        if status in ("waiting", "active"):
-            time.sleep(int(sleep_time))
-            continue
-        
-        if status == "completed":
-            try:
-                result = info["result"]["results"]["channels"][0]["alternatives"][0]
-                text = result["transcript"]
-                lang = result.get("language", "نامشخص")
-                return {"text": text, "language": lang}
-            except (KeyError, IndexError, TypeError):
-                return None
-        
-        if status == "failed":
-            print(f"Failed: {info}")  # دیباگ
-            return None
-        
-        time.sleep(int(sleep_time))
-    
-    return None
-
-
-
-######## second step #########
-
-
-def text_to_text(input_text, model="openai/gpt-3.5-turbo"):
-    response = requests.post(
-        url="https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {API_KEY_OPENROUTER}",
-            "Content-Type": "application/json",
-            "HTTP-Referer": "<YOUR_SITE_URL>",  # Optional. Site URL for rankings on openrouter.ai.
-            "X-Title": "<YOUR_SITE_NAME>",      # Optional. Site title for rankings on openrouter.ai.
-        },
-        data=json.dumps({
-            "model": model,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": input_text
-                }
-            ]
-        })
-    )
-    
-    # پردازش و نمایش خروجی
-    if response.status_code == 200:
-        result = response.json()
-        return result.get('choices', [{}])[0].get('message', {}).get('content', 'نامشخص')
-    else:
-        error_msg = f"خطا در درخواست: {response.status_code} - {response.text}"
-
-        return None
-
-
-
-
-
-
-
-
-######## third step #########
-
-
-import requests
-import os
-
-def text_to_auto(input_text, model="elevenlabs/v3_alpha", name_voice="Alice", filename="audio.wav"):
-    url = "https://api.aimlapi.com/v1/tts"
-    headers = {
-        "Authorization": f"Bearer {API_KEY_AIMLAPI}",  # بدون < و >
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": model,
-        "text": input_text,
-        "voice": name_voice
+        "input": input_text,
+        "voice": voice,  # حالا مطمئناً معتبره
+        "response_format": "mp3"
     }
     
-    response = requests.post(url, headers=headers, json=payload, stream=True)
-    if response.status_code != 200:
-        raise ValueError(f"API request failed with status {response.status_code}")
+    try:
+        response = requests.post(url, headers=headers, json=payload, stream=True, timeout=30)
+        
+        if response.status_code not in (200, 201):
+            return b""
+        
+        audio_bytes = io.BytesIO()
+        for chunk in response.iter_content(chunk_size=8192):
+            if chunk:
+                audio_bytes.write(chunk)
+        
+        audio_bytes.seek(0)
+        return audio_bytes.getvalue()
     
-    # جمع‌آوری تمام chunkها به صورت binary
-    audio_binary = b""
-    for chunk in response.iter_content(chunk_size=8192):
-        if chunk:
-            audio_binary += chunk
+    except Exception as e:
+        print(f'error: {e}')
+        return b""
+
+# =======================
+# تابع کمکی: استخراج جمله کامل
+# =======================
+def extract_complete_sentence(text, pattern=r'[.؛!؟]'):
+    """
+    جمله کامل آخر را استخراج می‌کند
+    """
+    matches = list(re.finditer(pattern, text))
+    if not matches:
+        return "", text
     
-    # mime type بر اساس filename (برای Flask مفید)
-    mime_type = "audio/wav" if filename.endswith('.wav') else "audio/mpeg"  # فرض بر wav برای Eleven Labs
+    last_match = matches[-1]
+    complete = text[:last_match.end()].strip()
+    remaining = text[last_match.end():].strip()
     
-    return {
-        "binary": audio_binary,
-        "filename": filename,
-        "mime_type": mime_type
-    }
-
-
-
-def main():
-    print("\nfert step")
-    result_auto_to_text = voice_to_text(input_auto, model="#g1_whisper-tiny", language='en', sleep_time=2)
-    print(f'result_auto_to_text{result_auto_to_text}\n')
-
-    print("\nsecond step")
-    input_text = result_auto_to_text['text']
-    result_text_to_text = text_to_text(input_text, model="openai/gpt-3.5-turbo")
-    print(f'result_text_to_text{result_text_to_text}\n')
-
-    print("\nthird step\n")
-    input_text = result_text_to_text
-    audio_file = 
-    text_to_auto(input_text, model="elevenlabs/v3_alpha", name_voice="Alice", name_audio_file=audio_file)
-
-
-main() 
-
- """
+    return complete, remaining

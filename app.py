@@ -1,8 +1,7 @@
 import os
 from flask import Flask, render_template, request, jsonify, send_file, Response, session, send_from_directory
-from utils import voice_to_text, text_to_text, text_to_auto
 from dotenv import load_dotenv
-from config import processing
+from utils import voice_to_text, text_to_text, text_to_audio, extract_complete_sentence
 import time
 import requests
 import json
@@ -16,36 +15,25 @@ import json
 import base64
 import io
 import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
-history = []
+conversation_history = {}
 
-load_dotenv()
-API_KEY_OPENROUTER = os.getenv("API_KEY_OPENROUTER")
-API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
+
 
 app = Flask(__name__)
 app.secret_key = 'my_secret_key'  # باید یه مقدار تصادفی و امن باشه
 
-logging.basicConfig(level=logging.DEBUG)
-logger = logging.getLogger(__name__)
 
+load_dotenv()
+API_KEY_OPENROUTER = os.getenv("API_KEY_OPENROUTER")
+API_KEY_AIMLAPI = os.getenv("API_KEY_AIMLAPI")
+API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 
+import threading  # اضافه کردن import برای Event
 
-def extract_last_complete_sentence(text, sentence_enders=r'[.!؟؛]'):
-    """
-    آخرین جمله کامل رو از text استخراج می‌کنه و بقیه رو برمی‌گردونه.
-    مثلاً: "abc. def ghi." -> sentence: "abc. def ghi.", remaining: ""
-    یا "abc. def" -> sentence: "abc.", remaining: " def"
-    """
-    # پیدا کردن موقعیت آخرین علامت پایان جمله (با lookahead برای فضای بعدش)
-    match = re.search(f'({sentence_enders})(?=\s|$)', text)
-    if not match:
-        return text, ""  # اگر علامتی نبود، کل رو جمله در نظر بگیر
-    
-    last_end_pos = match.end()
-    sentence = text[:last_end_pos].strip()
-    remaining = text[last_end_pos:].strip()  # بقیه بعد از علامت + فضا
-    return sentence, remaining
+# اضافه کردن دیکشنری برای flag های cancel
+cancel_flags = {}  # session_id: threading.Event()
 
 
 # روت اصلی: سرو کردن HTML
@@ -59,15 +47,11 @@ def index():
     return send_from_directory('static/html', 'index.html')
 
 
-@app.route('/reset_history', methods=['POST'])
-def reset_history():
-    print('??????????????????????????????????')
-    global history
-    history = []
-    return jsonify({'status': 'history reset', 'message': 'تاریخچه مکالمه پاک شد'})
 
-# فرض: text_to_text_stream و voice_to_text و text_to_auto مثل قبل تعریف شدن
 
+# =======================
+# Route اصلی بهینه‌شده با Parallel Processing و Cancel Support
+# =======================
 @app.route('/process_audio_stream', methods=['POST'])
 def process_audio_stream():
     if 'audio' not in request.files:
@@ -75,140 +59,312 @@ def process_audio_stream():
     
     audio_file = request.files['audio']
     
-    # فیکس: دیفالت برای model و language
-    modelSTT = request.form.get('modelSTT', 'large')  # دیفالت 'large' برای "#g1_whisper-large"
-    language = request.form.get('language', "default")     # بدون str() – اگر None باشه، None می‌مونه
-    modelLLM = request.form.get('modelLLM', 'openai/gpt-3.5-turbo')
+    # دریافت پارامترها
+    modelSTT = request.form.get('modelSTT', '#g1_whisper-medium')  # small برای سرعت
+    language = request.form.get('language', None)
+    modelLLM = request.form.get('modelLLM', 'groq')  # groq یا openrouter
     toneLLM = request.form.get('toneLLM', 'friendly')
     modelTTS = request.form.get('modelTTS', 'elevenlabs/v3_alpha')
-    nameVoiceTTS = request.form.get('nameVoiceTTS', 'Alice')
+    voiceTTS = request.form.get('nameVoiceTTS', 'Alice')
+    session_id = request.form.get('session_id', 'default')
     
     if language == "default":
         language = None
-
-    model_selekt = f"#g1_whisper-{modelSTT}"  # حالا اگر model='large'، درست می‌شه
-
+    
     if audio_file.filename == '':
         return jsonify({'error': 'فایل خالی است'}), 400
     
     input_binary = audio_file.read()
-
+    
+    # مدیریت history
+    if session_id not in conversation_history:
+        conversation_history[session_id] = []
+    history = conversation_history[session_id]
+    
+    # مدیریت cancel flag
+    if session_id not in cancel_flags:
+        cancel_flags[session_id] = threading.Event()
+    cancel_event = cancel_flags[session_id]
+    
     def generate():
-        # گام 1: STT
-        stt_result = voice_to_text(input_binary, language, model_selekt)
-        
-        if not stt_result:
-            yield f"data: {json.dumps({'error': 'خطا در تبدیل صدا به متن'})}\n\n"
-            return
-        
-        user_text = stt_result['text']
-        print(f'**Text extracted from voice:  {user_text}')
-        
-        current_chunk = ""
-        chunk_count = 0
-        start_time = time.time()
-        sentence_enders = r'[.؛]'  # الگوی پایان جمله (بدون \n برای split دقیق‌تر)
-        
-        yield f"data: {json.dumps({'type': 'start'})}\n\n"
-
-
-
-
-        llm_stream = text_to_text(user_text, history, modelLLM, toneLLM)
-        
-        # پیام کاربر را اول اضافه کن
-        history.append({"role": "user", "content": user_text})
-        print(f"history::: {history}")
-
-        all_text = []
-
-        for llm_chunk in llm_stream:
-            if not llm_chunk:
-                continue
+        try:
+            # چک اولیه cancel
+            if cancel_event.is_set():
+                yield f"data: {json.dumps({'type': 'cancelled', 'message': 'پروسس توسط کاربر قطع شد'})}\n\n"
+                return
             
-            current_chunk += llm_chunk
+            # =======================
+            # گام 1: STT (بهینه‌شده)
+            # =======================
+            stt_start = time.time()
+            stt_result = voice_to_text(input_binary, language, modelSTT)
+            print(f"voice_to_text: {stt_result}")
             
-            # شرط کات: >=4 کلمه و وجود علامت پایان جمله
-            words_count = len(re.findall(r'\S+', current_chunk))
-            has_sentence_end = bool(re.search(sentence_enders, current_chunk))
+            if cancel_event.is_set():
+                yield f"data: {json.dumps({'type': 'cancelled', 'message': 'پروسس در مرحله STT قطع شد'})}\n\n"
+                return
             
-            if words_count >= 4 and has_sentence_end:
-                # Extract آخرین جمله کامل و remaining
-                complete_sentence, remaining = extract_last_complete_sentence(current_chunk, sentence_enders)
-                print(f'**Sentenced text:  {complete_sentence}')
+            if not stt_result:
+                yield f"data: {json.dumps({'error': 'خطا در تبدیل صدا به متن'})}\n\n"
+                return
+            
+            user_text = stt_result['text']
+            
+            # اضافه کردن به history
+            history.append({"role": "user", "content": user_text})
+            
+            # =======================
+            # گام 2: LLM Streaming + TTS موازی با Cancel Support
+            # =======================
+            yield f"data: {json.dumps({'type': 'start'})}\n\n"
+            
+            # انتخاب مدل LLM
+            if modelLLM == 'groq':
+                # برای groq، فرض بر openrouter، اما اگر groq باشه، model رو تنظیم کن
+                model = "groq/llama-3.1-70b-versatile"  # مثال، بسته به config
+                llm_response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",  # یا groq endpoint
+                    headers={
+                        "Authorization": f"Bearer {API_KEY_OPENROUTER}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "<YOUR_SITE_URL>",
+                        "X-Title": "<YOUR_SITE_NAME>",
+                    },
+                    data=json.dumps({
+                        "model": model,
+                        "messages": [{"role": "user", "content": user_text}],  # ساده برای مثال، history رو اضافه کن
+                        "stream": True
+                    }),
+                    stream=True
+                )
+            else:
+                # استفاده از text_to_text اما با response explicit
+                # برای سادگی، inline می‌کنیم
+                system_prompt = {
+                    "role": "system",
+                    "content": f"You are a voice model with a {toneLLM}, colloquial tone, each sentence should be 10-15 words long and end with a '.'."
+                }
+                messages = [system_prompt, {"role": "user", "content": user_text}]
+                if history:
+                    for msg in history[-2:]:  # آخرین دو تا
+                        if msg.get("role") in ["user", "assistant"]:
+                            messages.append(msg)
                 
-
-                if complete_sentence.strip() and not complete_sentence == '.':  # اگر جمله خالی نبود
+                llm_response = requests.post(
+                    url="https://openrouter.ai/api/v1/chat/completions",
+                    headers={
+                        "Authorization": f"Bearer {API_KEY_OPENROUTER}",
+                        "Content-Type": "application/json",
+                        "HTTP-Referer": "<YOUR_SITE_URL>",
+                        "X-Title": "<YOUR_SITE_NAME>",
+                    },
+                    data=json.dumps({
+                        "model": modelLLM,
+                        "messages": messages,
+                        "stream": True
+                    }),
+                    stream=True
+                )
+            
+            if llm_response.status_code != 200:
+                yield f"data: {json.dumps({'error': 'خطا در LLM'})}\n\n"
+                llm_response.close()
+                return
+            
+            chunk_buffer = ""
+            chunk_count = 0
+            full_response = []
+            
+            # ThreadPool برای TTS های موازی
+            executor = ThreadPoolExecutor(max_workers=3)
+            pending_tts = {}  # {future: (index, text)}
+            
+            sentence_pattern = r'[.؛!؟\n]'
+            
+            # Generator سفارشی برای LLM با cancel
+            def llm_stream_with_cancel():
+                try:
+                    for line in llm_response.iter_lines():
+                        if cancel_event.is_set():
+                            llm_response.close()
+                            return
+                        if line:
+                            line = line.decode('utf-8')
+                            if line.startswith('data: '):
+                                data = line[6:]
+                                if data == '[DONE]':
+                                    break
+                                try:
+                                    json_data = json.loads(data)
+                                    delta = json_data.get('choices', [{}])[0].get('delta', {}).get('content', '')
+                                    if delta:
+                                        yield delta
+                                except json.JSONDecodeError:
+                                    continue
+                finally:
+                    llm_response.close()
+            
+            llm_stream = llm_stream_with_cancel()
+            
+            for llm_chunk in llm_stream:
+                if cancel_event.is_set():
+                    # shutdown executor برای توقف TTS ها
+                    executor.shutdown(wait=False)
+                    yield f"data: {json.dumps({'type': 'cancelled', 'message': 'پروسس در مرحله LLM قطع شد'})}\n\n"
+                    return
+                
+                if not llm_chunk:
+                    continue
+                
+                chunk_buffer += llm_chunk
+                full_response.append(llm_chunk)
+                
+                # ارسال فوری text به client
+                yield f"data: {json.dumps({'type': 'text_chunk', 'text': llm_chunk})}\n\n"
+                
+                # شرط کات: حداقل 2 کلمه + علامت پایان
+                words = re.findall(r'\S+', chunk_buffer)
+                has_end = bool(re.search(sentence_pattern, chunk_buffer))
+                
+                if len(words) >= 2 and has_end:
+                    sentence, remaining = extract_complete_sentence(chunk_buffer, sentence_pattern)
+                    
+                    if sentence.strip() and sentence.strip() not in ['.', '؛', '!', '؟']:
+                        # چک cancel قبل از TTS
+                        if cancel_event.is_set():
+                            executor.shutdown(wait=False)
+                            yield f"data: {json.dumps({'type': 'cancelled', 'message': 'پروسس قبل از TTS قطع شد'})}\n\n"
+                            return
+                        
+                        # شروع TTS به صورت async با wrapper
+                        def tts_with_cancel(sent):
+                            if cancel_event.is_set():
+                                return b""
+                            return text_to_audio(sent, modelTTS, voiceTTS)
+                        
+                        future = executor.submit(tts_with_cancel, sentence)
+                        pending_tts[future] = (chunk_count, sentence)
+                        chunk_count += 1
+                    
+                    chunk_buffer = remaining
+                
+                # چک کردن TTS های آماده
+                done_futures = [f for f in list(pending_tts) if f.done()]
+                for future in done_futures:
+                    idx, sent = pending_tts.pop(future)
                     try:
-                        if current_chunk.strip():
-                            all_text.append(current_chunk.strip())  # به لیست اضافه کن
+                        audio_binary = future.result(timeout=0.1)
                         
-                        audio_binary = text_to_auto(complete_sentence, modelTTS, nameVoiceTTS)
-                        
-                        if not audio_binary or len(audio_binary) == 0:
-                            yield f"data: {json.dumps({'type': 'error_chunk', 'index': chunk_count, 'message': 'خطا در TTS'})}\n\n"
-                            current_chunk = remaining  # remaining رو نگه دار
-                            continue
-                        
+                        if audio_binary and len(audio_binary) > 0:
+                            audio_b64 = base64.b64encode(audio_binary).decode('utf-8')
+                            
+                            chunk_data = {
+                                'type': 'audio_chunk',
+                                'index': idx,
+                                'chunk_text': sent,
+                                'audio_b64': audio_b64
+                            }
+                            yield f"data: {json.dumps(chunk_data)}\n\n"
+                    except Exception as e:
+                        print(f'TTS error: {e}')
+                        yield f"data: {json.dumps({'type': 'error_chunk', 'index': idx, 'message': str(e)})}\n\n"
+            
+            # منتظر باقی‌مانده TTS ها با timeout و چک cancel
+            if not cancel_event.is_set():
+                for future in as_completed(pending_tts.keys(), timeout=10):
+                    if cancel_event.is_set():
+                        executor.shutdown(wait=False)
+                        break
+                    idx, sent = pending_tts[future]
+                    try:
+                        audio_binary = future.result(timeout=1)
+                        if audio_binary and len(audio_binary) > 0:
+                            audio_b64 = base64.b64encode(audio_binary).decode('utf-8')
+                            yield f"data: {json.dumps({
+                                'type': 'audio_chunk',
+                                'index': idx,
+                                'chunk_text': sent,
+                                'audio_b64': audio_b64
+                            })}\n\n"
+                    except Exception as e:
+                        print(f'TTS error: {e}')
+            
+            # Chunk نهایی با چک
+            if not cancel_event.is_set() and chunk_buffer.strip():
+                try:
+                    audio_binary = text_to_audio(chunk_buffer.strip(), modelTTS, voiceTTS)
+                    if audio_binary and len(audio_binary) > 0:
                         audio_b64 = base64.b64encode(audio_binary).decode('utf-8')
-                        
-                        chunk_data = {
+                        yield f"data: {json.dumps({
                             'type': 'audio_chunk',
                             'index': chunk_count,
-                            'chunk_text': complete_sentence,
+                            'chunk_text': chunk_buffer.strip(),
                             'audio_b64': audio_b64
-                        }
-                        yield f"data: {json.dumps(chunk_data)}\n\n"
-                        
+                        })}\n\n"
                         chunk_count += 1
-                        current_chunk = remaining  # بقیه رو برای chunk بعدی نگه دار
-                        
-                    except Exception as e:
-                        logger.error(f"Exception در TTS chunk {chunk_count+1}: {str(e)}", exc_info=True)
-                        yield f"data: {json.dumps({'type': 'error_chunk', 'index': chunk_count, 'message': str(e)})}\n\n"
-                        current_chunk = remaining
-                        continue
-                
-                time.sleep(0.1)
+                except Exception as e:
+                    print(f'error: {e}')
             
-            # Timeout
-            if time.time() - start_time > 30:
-                break
-
-        full_response = ''.join(all_text)
-        history.append({"role": "assistant", "content": full_response})
-        print(f"history::: {history}")
-        print(f"/////all_text::: {all_text}")
-
-        # Chunk نهایی: هر چیزی که باقی مونده (بدون شرط)
-        if current_chunk.strip():
-            try:
-                audio_binary = text_to_auto(current_chunk.strip())
-                history.append({"role": "assistant", "content": current_chunk.strip()})
-                print(f"history::: {history}")
-
-                if audio_binary and len(audio_binary) > 0:
-                    audio_b64 = base64.b64encode(audio_binary).decode('utf-8')
-                    chunk_data = {
-                        'type': 'audio_chunk',
-                        'index': chunk_count,
-                        'chunk_text': current_chunk.strip(),
-                        'audio_b64': audio_b64
-                    }
-                    yield f"data: {json.dumps(chunk_data)}\n\n"
-                    chunk_count += 1
-                else:
-                    logger.warning("audio_binary خالی در chunk نهایی")
-            except Exception as e:
-                logger.error(f"Exception TTS نهایی: {str(e)}", exc_info=True)
+            # اضافه کردن پاسخ کامل به history (فقط اگر cancel نشده)
+            if not cancel_event.is_set():
+                full_text = ''.join(full_response)
+                history.append({"role": "assistant", "content": full_text})
+                
+                # محدود کردن history به 10 پیام آخر
+                if len(history) > 10:
+                    history[:] = history[-10:]
+            
+            executor.shutdown(wait=False)
+            
+            yield f"data: {json.dumps({'type': 'end', 'total_chunks': chunk_count})}\n\n"
         
-        yield f"data: {json.dumps({'type': 'end', 'total_chunks': chunk_count})}\n\n"
+        except Exception as e:
+            print(f'error: {e}')
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        finally:
+            # پاک کردن flag بعد از پایان
+            if session_id in cancel_flags:
+                del cancel_flags[session_id]
     
     return Response(generate(), mimetype='text/event-stream', headers={
         'Cache-Control': 'no-cache',
         'Connection': 'keep-alive',
         'Access-Control-Allow-Origin': '*',
+        'X-Accel-Buffering': 'no'
     })
+
+
+# =======================
+# Route پاک کردن history با cancel هم
+# =======================
+@app.route('/clear_history', methods=['POST'])
+def clear_history():
+    session_id = request.json.get('session_id', 'default')
+    if session_id in conversation_history:
+        conversation_history[session_id] = []
+    # set cancel اگر active باشه
+    if session_id in cancel_flags:
+        cancel_flags[session_id].set()
+    return jsonify({'status': 'success'})
+
+
+# =======================
+# Endpoint جدید برای قطع پروسس
+# =======================
+@app.route('/cancel_session', methods=['POST'])
+def cancel_session():
+    data = request.json
+    session_id = data.get('session_id', 'default')
+    
+    if session_id in cancel_flags:
+        cancel_flags[session_id].set()
+        # اختیاری: پاک کردن flag بعد از مدتی یا در end
+        # اما برای حالا، در generate پاک می‌کنیم
+    
+    # دستور قطع به API: چون response ها در generate track می‌شن، flag کافیه
+    # اگر نیاز به close explicit باشه، می‌تونیم active_responses dict اضافه کنیم
+    return jsonify({'status': 'cancelled', 'session_id': session_id})
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=8090)  

@@ -67,13 +67,15 @@
         .settings-toggle {
             display: flex;
             justify-content: flex-end;
-            margin-bottom: 20px;
+            margin-bottom: 90px;
         }
 
         .settings-btn {
-            background: #e2e8f0;
+            height: 23px;
+            background: #e2e8f000;
             border: none;
-            padding: 8px 16px;
+            /* padding: 8px 16px; */
+            margin: 12px;
             border-radius: 20px;
             cursor: pointer;
             font-size: 14px;
@@ -81,17 +83,10 @@
             transition: all 0.3s ease;
             display: flex;
             align-items: center;
-            gap: 5px;
         }
 
         .settings-btn:hover {
-            background: #cbd5e0;
             transform: translateY(-2px);
-        }
-
-        .settings-btn.active {
-            background: #667eea;
-            color: white;
         }
 
         /* Main Content & Settings Panel */
@@ -111,7 +106,7 @@
         .settings-panel {
             background: #f7fafc;
             border-radius: 15px;
-            padding: 30px 20px;
+            padding:10px;
         }
 
         .settings-panel.hidden {
@@ -119,7 +114,7 @@
         }
 
         .setting-group {
-            margin-bottom: 20px;
+            margin: 0 10px 20px 10px;
         }
 
         .setting-group label {
@@ -143,24 +138,16 @@
 
         .setting-group select:focus {
             outline: none;
-            border-color: #667eea;
+            border-color: #6a6a6a;
         }
 
         .settings-close {
-            background: #667eea;
-            color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 14px;
-            width: 100%;
-            margin-top: 20px;
+            background-color: #00000000;
             transition: all 0.3s ease;
         }
 
         .settings-close:hover {
-            background: #5568d3;
             transform: translateY(-2px);
         }
 
@@ -169,7 +156,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            margin: 30px 20px;
+            margin: 10px 20px 30px 20px;
             position: relative;
         }
 
@@ -214,15 +201,27 @@
                     rgba(6, 182, 212, 0.6));
         }
 
+        #stopBtn {
+            position: absolute;
+            left: 30px;
+        }
+
+        .stop-process {
+            display: none;
+            border: none;
+            background-color: #00000000;
+            margin-right: auto;
+        }
+
 
         #openBottom {
             display: flex;
             /* margin: 0 auto 15px auto; */
             border: none;
-            background-color: #ffffff00;
+            background-color: #00000000;
             position: absolute;
             bottom: 10px;
-            left: 46%;
+            left: 48%;
         }
 
         #audioFile {
@@ -396,11 +395,26 @@
 
         /* Action Buttons */
         .action-buttons {
-            display: flex;
+            display: none;
             margin-left: auto;
             gap: 10px;
             justify-content: center;
             margin-bottom: 50px;
+            position: absolute;
+            right: 10px;
+            top: -160px;
+            transition: all 0.3s ease;
+
+            background-color: #fcfcfc;
+            padding: 20px 10px;
+            border-radius: 10px;
+            border: 2px solid #000000;
+        }
+
+        .moreBtn {
+            background: #00000000;
+            border: none;
+            margin: 13px 13px 0 auto;
         }
 
         .btn {
@@ -417,29 +431,30 @@
         }
 
         .btn-file {
-            background: #667eea;
+            background: #5d5c5c;
             color: white;
         }
 
         .btn-file:hover {
-            background: #5568d3;
+            background: #515050;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.3);
         }
 
         .btn-reset {
-            background: #ef4444;
+            background: #5d5c5c;
             color: white;
         }
 
         .btn-reset:hover {
-            background: #dc2626;
+            background: #515050;
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(239, 68, 68, 0.3);
         }
 
         /* Transcript Area */
         .transcript-area {
+            display: none;
             background: #f7fafc;
             border-radius: 15px;
             max-height: 90px;
@@ -485,25 +500,16 @@
 
         .replay-button {
             display: none;
-            background: #10b981;
-            color: white;
+            background: #00000000;
             border: none;
-            padding: 10px 20px;
-            border-radius: 10px;
-            cursor: pointer;
-            font-size: 14px;
             margin-top: 15px;
             width: 100%;
             transition: all 0.3s ease;
-            align-items: center;
             justify-content: center;
-            gap: 8px;
         }
 
         .replay-button:hover {
-            background: #059669;
             transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(16, 185, 129, 0.3);
         }
 
         .empty-state {

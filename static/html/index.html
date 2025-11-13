@@ -104,21 +104,29 @@
         <!-- Settings Toggle -->
         <div class="settings-toggle">
             <!-- Action Buttons -->
-            <div class="action-buttons">
+             <button id="moreBtn" class="moreBtn"><svg xmlns="http://www.w3.org/2000/svg" height="30px" viewBox="0 -960 960 960" width="30px" fill="#FFFFFF"><path d="M480-160q-33 0-56.5-23.5T400-240q0-33 23.5-56.5T480-320q33 0 56.5 23.5T560-240q0 33-23.5 56.5T480-160Zm0-240q-33 0-56.5-23.5T400-480q0-33 23.5-56.5T480-560q33 0 56.5 23.5T560-480q0 33-23.5 56.5T480-400Zm0-240q-33 0-56.5-23.5T400-720q0-33 23.5-56.5T480-800q33 0 56.5 23.5T560-720q0 33-23.5 56.5T480-640Z"/></svg></button>
+            <div class="action-buttons" id="actionButtons">
                 <button class="btn btn-file" id="sendFileBtn">
                     📁 انتخاب فایل صوتی
                 </button>
+                <input type="file" id="audioFile" accept="audio/*">
                 <button class="btn btn-reset" id="resetButton">
                     🔄 شروع مجدد
                 </button>
             </div>
 
-            <button class="settings-btn" id="settingsBtn">تنظیمات</button>
+            <button class="settings-btn" id="settingsBtn"><svg xmlns="http://www.w3.org/2000/svg" height="30px" viewBox="0 -960 960 960" width="30px" fill="#FFFFFF">
+                <path d="m370-80-16-128q-13-5-24.5-12T307-235l-119 50L78-375l103-78q-1-7-1-13.5v-27q0-6.5 1-13.5L78-585l110-190 119 50q11-8 23-15t24-12l16-128h220l16 128q13 5 24.5 12t22.5 15l119-50 110 190-103 78q1 7 1 13.5v27q0 6.5-2 13.5l103 78-110 190-118-50q-11 8-23 15t-24 12L590-80H370Zm70-80h79l14-106q31-8 57.5-23.5T639-327l99 41 39-68-86-65q5-14 7-29.5t2-31.5q0-16-2-31.5t-7-29.5l86-65-39-68-99 42q-22-23-48.5-38.5T533-694l-13-106h-79l-14 106q-31 8-57.5 23.5T321-633l-99-41-39 68 86 64q-5 15-7 30t-2 32q0 16 2 31t7 30l-86 65 39 68 99-42q22 23 48.5 38.5T427-266l13 106Zm42-180q58 0 99-41t41-99q0-58-41-99t-99-41q-59 0-99.5 41T342-480q0 58 40.5 99t99.5 41Zm-2-140Z"/></svg>
+            </button>
         </div>
 
         
     <div class="container" id="container">
-
+        <div id="stopBtn">
+            <button id="stopProcess" class="stop-process">
+                <svg xmlns="http://www.w3.org/2000/svg" height="34px" viewBox="0 -960 960 960" width="34px" fill="#EA3323"><path d="M320-320h320v-320H320v320ZM480-80q-83 0-156-31.5T197-197q-54-54-85.5-127T80-480q0-83 31.5-156T197-763q54-54 127-85.5T480-880q83 0 156 31.5T763-763q54 54 85.5 127T880-480q0 83-31.5 156T763-197q-54 54-127 85.5T480-80Zm0-80q134 0 227-93t93-227q0-134-93-227t-227-93q-134 0-227 93t-93 227q0 134 93 227t227 93Zm0-320Z"/></svg>
+            </button>
+        </div>
         <!-- Main Content -->
         <div class="main-content" id="mainContent">
             <!-- Microphone Area -->
@@ -133,16 +141,34 @@
                     </div>
                 </div>
             </button>
+
             <button id="openBottom"><svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000"><path d="M480-344 240-584l47.33-47.33L480-438.67l192.67-192.66L720-584 480-344Z"/></svg></button>
 
             <div class="status-text" id="statusText">آماده برای گفتگو</div>
-            <input type="file" id="audioFile" accept="audio/*">
-            <button class="replay-button" id="replayButton">🔁 پخش مجدد همه</button>
+        
+            <div class="transcript-area" id="transcriptArea">
+                <div class="empty-state">هنوز پیامی ارسال نشده است</div>
+            </div>
+
+            <button class="replay-button" id="replayButton">
+                <svg xmlns="http://www.w3.org/2000/svg" height="35px" viewBox="0 -960 960 960" width="35px" fill="#000000"><path d="M380-300v-360l280 180-280 180ZM480-40q-108 0-202.5-49.5T120-228v108H40v-240h240v80h-98q51 75 129.5 117.5T480-120q115 0 208.5-66T820-361l78 18q-45 136-160 219.5T480-40ZM42-520q7-67 32-128.5T143-762l57 57q-32 41-52 87.5T123-520H42Zm214-241-57-57q53-44 114-69.5T440-918v80q-51 5-97 25t-87 52Zm449 0q-41-32-87.5-52T520-838v-80q67 6 128.5 31T762-818l-57 57Zm133 241q-5-51-25-97.5T761-705l57-57q44 52 69 113.5T918-520h-80Z"/></svg>
+            </button>
         </div>
 
         <!-- Settings Panel -->
         <div class="settings-panel hidden" id="settingsPanel">
+            <button class="settings-close" id="settingsClose">
+                    <svg xmlns="http://www.w3.org/2000/svg" height="30px" viewBox="0 -960 960 960" width="30px" fill="#000000"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg>
+            </button>
             <h2 style="color: #2d3748; margin-bottom: 20px; text-align: center;">⚙️ تنظیمات</h2>
+            <div class="setting-group">
+                <label for="listeningAutoSelect">گوش دادن خودکار:</label>
+                <select id="listeningAutoSelect">
+                    <option value="true" selected>روشن</option>
+                    <option value="false">خاموش</option>
+                </select>
+            </div>
+
             <div class="STT">
                 <h4>STT</h4>
                 <div class="setting-group">
@@ -156,11 +182,9 @@
                 <div class="setting-group">
                     <label for="modelSelectSTT">مدل پردازش:</label>
                     <select id="modelSelectSTT">
-                        <option value="tiny">سریع (Tiny)</option>
-                        <option value="small">کوچک (Small)</option>
-                        <option value="medium" selected>متوسط (Medium)</option>
-                        <option value="base">پایه (Base)</option>
-                        <option value="large">بزرگ (Large)</option>
+                        <option value="whisper-1">whisper-1</option>
+                        <option value="gpt-4o-transcribe">gpt-4o-transcribe</option>
+                        <option value="gpt-4o-mini-transcribe" selected>gpt-4o-mini-transcribe</option>
                     </select>
                 </div>
             </div>  
@@ -176,18 +200,6 @@
                         <option value="anthropic/claude-3.5-sonnet">claude-3.5-sonnet</option>
                         <option value="google/gemini-2.5-flash-lite">gemini-2.5-flash-lite</option>
                         <option value="google/gemini-2.5-flash">gemini-2.5-flash</option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
                     </select>
                 </div>
                     <div class="setting-group">
@@ -207,36 +219,27 @@
                 <div class="setting-group">
                     <label for="modelSelectTTS">مدل پردازش:</label>
                     <select id="modelSelectTTS">
-                        <option value="elevenlabs/v3_alpha" selected>elevenlabs/v3_alpha</option>
-                        <option value="minimax/speech-2.6-hd">minimax/speech-2.6-hd</option>
-                        <option value="openai/tts-1-hd">openai/tts-1-hd</option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
-                        <option value=""></option>
+                        <option value="tts-1" selected>tts-1</option>
+                        <option value="tts-1-hd">tts-1-hd</option>
+                        <option value="gpt-4o-mini-tts">gpt-4o-mini-tts</option>
                     </select>
                 </div>
                 <div class="setting-group">
                     <label for="nameVoiceSelectTTS">صدای گوینده:</label>
                     <select id="nameVoiceSelectTTS">
-                        <option value="Alice">Alice</option>
-                        <option value="bb" selected>bb</option>
-                        <option value="cc">cc</option>
-    
+                        <option value="alloy">alloy</option>
+                        <option value="echo" selected>echo</option>
+                        <option value="fable">fable</option>
+                        <option value="onyx">onyx</option>
+                        <option value="nova">nova</option>
+                        <option value="shimmer">shimmer</option>
                     </select>
                 </div>
             </div>
-
-            <button class="settings-close" id="settingsClose">
-                ✓ ذخیره و بازگشت
-            </button>
         </div>
     </div>
     <script src="../static/js/script.js"></script>
+    <script src="../static/js/autoRunStop.js"></script>
 </body>
 
 </html>
