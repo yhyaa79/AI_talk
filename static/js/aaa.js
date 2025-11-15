@@ -19,8 +19,16 @@ const modelSelectLLM = document.getElementById('modelSelectLLM');
 const toneSelectSTT = document.getElementById('toneSelectSTT');
 const modelSelectTTS = document.getElementById('modelSelectTTS');
 const nameVoiceSelectTTS = document.getElementById('nameVoiceSelectTTS');
+const listeningAutoSelect = document.getElementById('listeningAutoSelect');
+const statusAnimation = document.getElementById('statusAnimation'); 
+const openBottom = document.getElementById('openBottom');
+const closeBottom = document.getElementById('closeBottom');
+const container = document.getElementById('container');
+const moreBtn = document.getElementById('moreBtn');
+const actionButtons = document.getElementById('actionButtons');
+const stopProcess = document.getElementById('stopProcess');
+const stopBtn = document.getElementById('stopBtn');
 
-let statusAnimation = document.getElementById('statusAnimation'); // Added reference
 
 let isPlaying = false;
 let currentIndex = -1;
@@ -32,8 +40,9 @@ let transcriptItems = [];
 let allAudiosFinished = false;
 let generationComplete = false;
 let nameVoiceObjTTS = {
-    'elevenlabs/v3_alpha': ['Alice', 'bb', 'cc'],
-    'minimax/speech-2.6-hd': ['Alice', 'bbb', 'ccc']
+    'tts-1': ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'],
+    'tts-1-hd': ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'],
+    'gpt-4o-mini-tts': ['Calm', 'Surfer', 'Professional']
 };
 
 // Audio visualization setup
@@ -42,6 +51,20 @@ let analyser = null;
 let source = null;
 let inputVizInterval = null;
 let outputVizInterval = null;
+
+const audioSources = new Map(); // برای ذخیره source هر audio
+
+// متغیرهای اضافی برای voice activation
+// متغیرهای اضافی برای voice activation
+let sensitivity = 0.1; // حساسیت صدا (از 0 تا 1، مقدار بالاتر = حساسیت کمتر)
+let timeoutDuration = 2000; // مدت زمان (میلی‌ثانیه) برای غیرفعال شدن بعد از آخرین صدا
+let voiceCheckInterval; // interval برای چک کردن صدا
+let timeoutId; // timeout برای توقف recording
+let stream; // stream میکروفون (برای voice detection)
+let sourceDetection = null; // source جداگانه برای detection
+let sourceRecording = null; // source جداگانه برای recording
+let isBotSpeaking = false; // flag برای جلوگیری از trigger در حین پخش TTS
+
 
 function initAudioViz() {
     if (!audioContext) {
@@ -66,9 +89,121 @@ function updateInputViz() {
         sum += val * val;
     }
     const rms = Math.sqrt(sum / dataArray.length);
-    const vol = 1.5 + (rms * 3); // Tuned for subtle to prominent pulsing (0.8-2.6 scale)
+    const vol = 0.8 + (rms * 1.8); // Tuned for subtle to prominent pulsing (0.8-2.6 scale)
     statusAnimation.style.setProperty('--vol', vol);
 }
+
+// تابع محاسبه حجم صدا (RMS) - بر اساس updateInputViz
+function getVolume() {
+    if (!analyser) return 0;
+    const dataArray = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(dataArray);
+    let sum = 0;
+    for (let i = 0; i < dataArray.length; i++) {
+        const val = (dataArray[i] / 128.0) - 1.0;
+        sum += val * val;
+    }
+    return Math.sqrt(sum / dataArray.length);
+}
+
+// تابع شروع recording (مشترک برای کلیک و صدا)
+async function startRecording() {
+    if (isRecording) return;
+    try {
+        if (!stream) {
+            stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            initAudioViz();
+            sourceDetection = audioContext.createMediaStreamSource(stream);
+            sourceDetection.connect(analyser);
+        }
+        // sourceRecording برای viz در حین recording
+        sourceRecording = audioContext.createMediaStreamSource(stream);
+        sourceRecording.connect(analyser);
+        startInputViz();
+        mediaRecorder = new MediaRecorder(stream);
+        audioChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
+        mediaRecorder.onstop = () => {
+            const audioBlob = new Blob(audioChunks, {
+                type: 'audio/mpeg'
+            });
+            const formData = new FormData();
+            formData.append('audio', audioBlob, 'user_audio.mp3');
+            formData.append('language', document.getElementById('languageSelect').value);
+            formData.append('modelSTT', document.getElementById('modelSelectSTT').value);
+            formData.append('modelLLM', document.getElementById('modelSelectLLM').value);
+            formData.append('toneLLM', document.getElementById('toneSelectSTT').value);
+            formData.append('modelTTS', document.getElementById('modelSelectTTS').value);
+            formData.append('nameVoiceTTS', document.getElementById('nameVoiceSelectTTS').value);
+            sendAudioStream(formData);
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        setStatus('در حال ضبط صدا...', 'recording');
+        // reset sensitivity به مقدار اولیه بعد از stop (اینجا فقط برای کامل بودن)
+    } catch (err) {
+        setStatus('خطا در دسترسی به میکروفون', 'idle');
+    }
+}
+
+// تابع توقف recording (مشترک)
+function stopRecording() {
+    if (!isRecording) return;
+    mediaRecorder.stop();
+    if (inputVizInterval) {
+        clearInterval(inputVizInterval);
+        inputVizInterval = null;
+    }
+    if (sourceRecording) {
+        sourceRecording.disconnect();
+        sourceRecording = null;
+    }
+    statusAnimation.style.removeProperty('--vol');
+    isRecording = false;
+    setStatus('در حال پردازش...', 'processing');
+    clearTimeout(timeoutId); // پاک کردن timeout
+    sensitivity = 0.1; // reset حساسیت به مقدار اولیه
+}
+
+// تابع چک کردن صدا
+function checkVoice() {
+    if (!stream || !analyser || isBotSpeaking) return; // skip اگر بات در حال صحبت باشه
+    const volume = getVolume();
+    if (volume > sensitivity) {
+        sensitivity = 0.07; // افزایش حساسیت (threshold بالاتر = حساسیت کمتر) بعد از شناسایی صدا
+        if (!isRecording) {
+            startRecording();
+        }
+        // همیشه timeout را reset کن، حتی اگر قبلاً recording فعال باشد
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+            if (isRecording) {
+                stopRecording();
+            }
+        }, timeoutDuration);
+    }
+}
+
+// تابع راه‌اندازی voice activation
+function initVoiceActivation() {
+    if (voiceCheckInterval) return; // اگر قبلاً شروع شده
+    const autoListen = document.getElementById('listeningAutoSelect').value === 'true';
+    if (!autoListen) return; // اگر false باشد، voice activation را فعال نکن
+    // گرفتن stream برای detection
+    navigator.mediaDevices.getUserMedia({ audio: true }).then(s => {
+        stream = s;
+        initAudioViz();
+        sourceDetection = audioContext.createMediaStreamSource(stream);
+        sourceDetection.connect(analyser);
+        // شروع چک دوره‌ای با interval کوچکتر (50ms) برای detection سریع‌تر
+        voiceCheckInterval = setInterval(checkVoice, 50);
+    }).catch(err => {
+        console.error('خطا در دسترسی به میکروفون برای voice detection:', err);
+    });
+}
+
 
 function startOutputViz() {
     if (outputVizInterval) clearInterval(outputVizInterval);
@@ -82,6 +217,7 @@ function updateOutputViz() {
     const bands = 5;
     const bandWidth = Math.floor(freqData.length / bands);
     const vizItems = document.querySelectorAll('.status-animation .viz-item');
+    
     for (let i = 0; i < bands; i++) {
         let sum = 0;
         const start = i * bandWidth;
@@ -90,13 +226,24 @@ function updateOutputViz() {
             sum += freqData[j];
         }
         const avg = sum / (end - start) / 255;
-        // کشیده شدن عمودی (ارتفاع) برای شبیه شدن به لوگوی صوت
-        const height = 20 + (avg * 80); // ارتفاع از 20px تا 100px
-        vizItems[i].style.height = `${height}px`;
-        vizItems[i].style.borderRadius = '10px'; // تغییر از دایره به مستطیل گرد
+        
+        // تغییر ارتفاع - از 35px تا 175px (5 برابر)
+        const baseHeight = 35; // ارتفاع پایه
+        const maxHeight = baseHeight * 5; // حداکثر ارتفاع (175px)
+        const height = baseHeight + (avg * (maxHeight - baseHeight));
+        
+        vizItems[i].style.width = '35px'; // عرض ثابت
+        vizItems[i].style.height = `${height}px`; // ارتفاع متغیر
+        vizItems[i].style.borderRadius = '17.5px'; // شکل ستونی با گوشه‌های گرد
+        
+        // برای رشد از مرکز، جابجایی عمودی را تنظیم می‌کنیم
+        // وقتی ارتفاع افزایش می‌یابد، باید نصف تفاوت را به بالا جابجا کنیم
+        const heightDiff = height - baseHeight;
+        const offset = -(heightDiff / 2);
+        
+        vizItems[i].style.transform = `translateY(${offset}px)`;
     }
 }
-
 
 // مقدار های توی سلکت nameVoiceSelectTTS
 modelSelectTTS.addEventListener('change', () => {
@@ -113,6 +260,7 @@ modelSelectTTS.addEventListener('change', () => {
 settingsBtn.addEventListener('click', () => {
     mainContent.classList.add('hidden');
     settingsPanel.classList.remove('hidden');
+    stopBtn.style.display = 'none';
     settingsBtn.classList.add('active');
 });
 
@@ -120,44 +268,28 @@ settingsBtn.addEventListener('click', () => {
 settingsClose.addEventListener('click', () => {
     settingsPanel.classList.add('hidden');
     mainContent.classList.remove('hidden');
+    stopBtn.style.display = 'flex';
     settingsBtn.classList.remove('active');
 });
+
 
 // Status change with animation
 function setStatus(text, state) {
     statusText.classList.add('fade');
     micArea.className = 'mic-area';
+    console.log("state" , state);
+    
+    const activeStates = ["processing", "recording", "generating"];
+    if (activeStates.includes(state)) {
+        stopProcess.style.display = 'flex';
+    } else {
+        stopProcess.style.display = 'none';
+    }
 
     setTimeout(() => {
         statusText.textContent = text;
         micArea.classList.add(`state-${state}`);
         statusText.classList.remove('fade');
-
-        // دسترسی به المان SVG داخل دکمه میکروفون
-        const micIcon = document.querySelector('.mic-icon');
-
-        if (state === "idle") {
-            // برای حالت idle: دو path اصلی میکروفون (مانند کد فعلی)
-            micIcon.innerHTML = `
-            `;
-        } else if (state === "recording") {
-            // مثال برای حالت recording: path های متفاوت (مثلاً با موج صدا یا آیکون ضبط)
-            micIcon.innerHTML = `
-         `;
-        } else if (state === "processing") {
-            // مثال برای حالت paused: path های متفاوت (مثلاً با خط افقی برای توقف)
-            micIcon.innerHTML = `
-            `;
-        } else if (state === "generating") {
-            // مثال برای حالت error: path های متفاوت (مثلاً علامت خطا)
-            micIcon.innerHTML = `
-            `;
-        } else {
-            // حالت پیش‌فرض: برگشت به path های idle
-            micIcon.innerHTML = `
-
-            `;
-        }
     }, 300);
 }
 
@@ -169,9 +301,9 @@ function checkIfComplete() {
             clearInterval(outputVizInterval);
             outputVizInterval = null;
         }
-        if (source) {
-            source.disconnect();
-            source = null;
+        if (sourceRecording) { // فقط sourceRecording
+            sourceRecording.disconnect();
+            sourceRecording = null;
         }
         const vizItems = document.querySelectorAll('.viz-item');
         vizItems.forEach(item => {
@@ -221,6 +353,10 @@ nameVoiceSelectTTS.addEventListener('change', () => {
     saveToLocalStorage(nameVoiceSelectTTS, 'nameVoiceTTS');
 });
 
+listeningAutoSelect.addEventListener('change', () => {
+    saveToLocalStorage(listeningAutoSelect, 'listeningAuto');
+});
+
 // بارگذاری مقادیر ذخیره‌شده هنگام لود صفحه
 window.addEventListener('load', () => {
     const savedLanguage = localStorage.getItem('language');
@@ -229,6 +365,7 @@ window.addEventListener('load', () => {
     const savedtoneLLM = localStorage.getItem('toneLLM');
     const savedModelTTS = localStorage.getItem('modelTTS');
     const savedNameVoiceTTS = localStorage.getItem('nameVoiceTTS');
+    const savedlisteningAuto = localStorage.getItem('listeningAuto');
 
     if (savedLanguage) {
         languageSelect.value = savedLanguage;
@@ -253,6 +390,13 @@ window.addEventListener('load', () => {
     if (savedNameVoiceTTS) {
         nameVoiceSelectTTS.value = savedNameVoiceTTS;
     }
+
+    if (savedlisteningAuto) {
+        listeningAutoSelect.value = savedlisteningAuto;
+    }
+
+    // شروع voice activation هنگام لود صفحه
+    initVoiceActivation();
 });
 
 // File Upload
@@ -280,55 +424,15 @@ audioFileInput.addEventListener('change', (e) => {
     }
 });
 
-// Microphone Recording
-micBtn.addEventListener('click', async () => {
+// Microphone Recording - تغییر یافته برای استفاده از startRecording و stopRecording
+micBtn.addEventListener('click', () => {
     if (!isRecording) {
-        try {
-            const stream = await navigator.mediaDevices.getUserMedia({
-                audio: true
-            });
-            initAudioViz();
-            source = audioContext.createMediaStreamSource(stream);
-            source.connect(analyser);
-            startInputViz();
-            mediaRecorder = new MediaRecorder(stream);
-            audioChunks = [];
-
-            mediaRecorder.ondataavailable = (e) => audioChunks.push(e.data);
-            mediaRecorder.onstop = () => {
-                const audioBlob = new Blob(audioChunks, {
-                    type: 'audio/mpeg'
-                });
-                const formData = new FormData();
-                formData.append('audio', audioBlob, 'user_audio.mp3');
-                formData.append('language', document.getElementById('languageSelect').value);
-                formData.append('modelSTT', document.getElementById('modelSelectSTT').value);
-                formData.append('modelLLM', document.getElementById('modelSelectLLM').value);
-                formData.append('toneLLM', document.getElementById('toneSelectSTT').value);
-                formData.append('modelTTS', document.getElementById('modelSelectTTS').value);
-                formData.append('nameVoiceTTS', document.getElementById('nameVoiceSelectTTS').value);
-                sendAudioStream(formData);
-            };
-
-            mediaRecorder.start();
-            isRecording = true;
-            setStatus('در حال ضبط صدا...', 'recording');
-        } catch (err) {
-            setStatus('خطا در دسترسی به میکروفون', 'idle');
-        }
+        startRecording();
+        clearTimeout(timeoutId); // جلوگیری از توقف خودکار با کلیک
     } else {
-        mediaRecorder.stop();
-        if (inputVizInterval) {
-            clearInterval(inputVizInterval);
-            inputVizInterval = null;
-        }
-        if (source) {
-            source.disconnect();
-            source = null;
-        }
-        statusAnimation.style.removeProperty('--vol');
-        isRecording = false;
-        setStatus('در حال پردازش...', 'processing');
+        stopAllAudio()
+        stopRecording();
+        // اگر voice detection متوقف نشده، ادامه بده (در اینجا interval رو پاک نمی‌کنیم مگر اینکه بخوای)
     }
 });
 
@@ -349,19 +453,17 @@ function playNext() {
         currentIndex++;
         const audio = audioPlaylist[currentIndex];
         
-        // اتصال به audioContext قبل از پخش
-        initAudioViz(); // اطمینان از ایجاد audioContext
-        
         audio.play().then(() => {
             isPlaying = true;
+            isBotSpeaking = true; // set flag
             
-            // اتصال audio به analyser برای visualization
-            if (source) {
-                source.disconnect();
+            // اگر source برای این audio قبلاً ساخته نشده، بساز
+            if (!audioSources.has(audio)) {
+                const newSource = audioContext.createMediaElementSource(audio);
+                newSource.connect(analyser);
+                newSource.connect(audioContext.destination);
+                audioSources.set(audio, newSource);
             }
-            source = audioContext.createMediaElementSource(audio);
-            source.connect(analyser);
-            analyser.connect(audioContext.destination); // اضافه شده: اتصال به destination برای پخش صدا
             
             if (!outputVizInterval) {
                 startOutputViz();
@@ -369,20 +471,49 @@ function playNext() {
         }).catch(err => {
             console.log('خطا در پخش:', err);
             isPlaying = false;
+            isBotSpeaking = false; // reset در صورت خطا
             playNext();
         });
     } else if (currentIndex + 1 >= audioPlaylist.length) {
         allAudiosFinished = true;
+        isBotSpeaking = false; // reset
         checkIfComplete();
     }
 }
 
+
+function stopAllAudio() {
+    // توقف تمام فایل‌های صوتی در playlist
+    audioPlaylist.forEach(audio => {
+        audio.pause();
+        audio.currentTime = 0; // ریست کردن زمان پخش برای شروع از ابتدا در پخش بعدی
+    });
+    
+    // به‌روزرسانی فلگ‌ها
+    isPlaying = false;
+    isBotSpeaking = false;
+    allAudiosFinished = true; // می‌توانید این را بر اساس نیاز تغییر دهید
+    
+    // توقف visualization اگر فعال باشد
+    if (outputVizInterval) {
+        clearInterval(outputVizInterval);
+        outputVizInterval = null;
+    }
+    
+    // اختیاری: ریست کردن ایندکس به ابتدای playlist
+    currentIndex = 0;
+    
+    console.log('تمام پخش‌های صوتی متوقف شد.');
+}
+
+
 function onEnded() {
-    if (source) {
-        source.disconnect();
-        source = null;
+    if (sourceRecording) { // فقط sourceRecording
+        sourceRecording.disconnect();
+        sourceRecording = null;
     }
     isPlaying = false;
+    isBotSpeaking = false; // reset
     playNext();
 }
 
@@ -390,11 +521,7 @@ function addAudioToPlaylist(index, chunkText, audioB64) {
     const blob = base64ToBlob(audioB64);
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
-    audio.addEventListener('ended', onEnded);
-    
-    // حذف crossOrigin که باعث مشکل می‌شود
-    // audio.crossOrigin = "anonymous"; // این خط را حذف کنید اگر وجود دارد
-    
+    audio.addEventListener('ended', onEnded); // استفاده از onEnded که isBotSpeaking رو reset می‌کنه
     audioPlaylist.push(audio);
 
     // Add to transcript
@@ -423,9 +550,9 @@ function addAudioToPlaylist(index, chunkText, audioB64) {
     transcriptItems.push(item);
 
     // Show replay button
-    if (audioPlaylist.length > 0) {
+/*     if (audioPlaylist.length > 0) {
         replayButton.style.display = 'flex';
-    }
+    } */
 
     receivedChunks++;
 
@@ -435,7 +562,6 @@ function addAudioToPlaylist(index, chunkText, audioB64) {
 
     scrollToBottom();
 }
-
 
 function sendAudioStream(formData) {
     fetch('/process_audio_stream', {
@@ -511,7 +637,7 @@ function handleStreamData(data) {
 // Reset History
 resetButton.addEventListener('click', async () => {
     try {
-        const response = await fetch("/reset_history", {
+        const response = await fetch("/clear_history", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -522,7 +648,7 @@ resetButton.addEventListener('click', async () => {
             transcriptArea.innerHTML = '<div class="empty-state">هنوز پیامی ارسال نشده است</div>';
             audioPlaylist = [];
             transcriptItems = [];
-            replayButton.style.display = 'none';
+/*          replayButton.style.display = 'none'; */ 
             allAudiosFinished = false;
             generationComplete = false;
             if (inputVizInterval) {
@@ -533,9 +659,9 @@ resetButton.addEventListener('click', async () => {
                 clearInterval(outputVizInterval);
                 outputVizInterval = null;
             }
-            if (source) {
-                source.disconnect();
-                source = null;
+            if (sourceRecording) { // فقط sourceRecording
+                sourceRecording.disconnect();
+                sourceRecording = null;
             }
             const vizItems = document.querySelectorAll('.viz-item');
             vizItems.forEach(item => {
@@ -553,8 +679,94 @@ resetButton.addEventListener('click', async () => {
 
 // Replay All
 replayButton.addEventListener('click', () => {
+    // اگر در حال پخش هستیم، متوقفش کن
+    if (currentIndex >= 0 && currentIndex < audioPlaylist.length) {
+        audioPlaylist[currentIndex].pause();
+        audioPlaylist[currentIndex].currentTime = 0;
+    }
+    
+    // reset کردن همه audioها
+    audioPlaylist.forEach(audio => {
+        audio.pause();
+        audio.currentTime = 0;
+    });
+    
     currentIndex = -1;
     isPlaying = false;
     allAudiosFinished = false;
     playNext();
+});
+
+
+let isFirstClick = true; // متغیر برای ردیابی وضعیت کلیک
+
+openBottom.addEventListener('click', () => {
+    if (isFirstClick) {
+        // اول minHeight را تغییر می‌دهیم تا انیمیشن اجرا شود
+        container.style.minHeight = '520px';
+        
+        // بعد از اتمام انیمیشن (فرض بر این است که transition روی minHeight تعریف شده)، المان‌ها را نمایش می‌دهیم
+        container.addEventListener('transitionend', function showElements() {
+            statusText.style.display = 'grid';
+            transcriptArea.style.display = 'grid';
+            replayButton.style.display = 'flex';
+            // برای جلوگیری از اجرای مجدد، listener را حذف می‌کنیم
+            container.removeEventListener('transitionend', showElements);
+        }, { once: true }); // once: true برای اجرای یک‌بار
+        
+        openBottom.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000"><path d="M480-545.33 287.33-352.67 240-400l240-240 240 240-47.33 47.33L480-545.33Z"/></svg>';
+    } else {
+        // اول المان‌ها را مخفی می‌کنیم
+        statusText.style.display = 'none';
+        transcriptArea.style.display = 'none';
+        replayButton.style.display = 'none';
+        
+        // بعد minHeight را تغییر می‌دهیم
+        container.style.minHeight = '300px';
+        
+        openBottom.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000"><path d="M480-344 240-584l47.33-47.33L480-438.67l192.67-192.66L720-584 480-344Z"/></svg>';
+    }
+    isFirstClick = !isFirstClick; // تغییر وضعیت کلیک
+});
+
+
+
+document.addEventListener('DOMContentLoaded', function() {
+
+    moreBtn.addEventListener('click', function() {
+        const computedStyle = window.getComputedStyle(actionButtons);
+        if (computedStyle.display === 'none') {
+            actionButtons.style.display = 'inline-grid'; 
+            actionButtons.style.right = '30px'; 
+            actionButtons.style.top = '410px'; 
+        } else {
+            actionButtons.style.display = 'none';
+        }
+    });
+});
+
+
+
+
+// متوقف کردن فرایند در هر لحظه با دکمه stop و اندپونت cancel_session
+stopProcess.addEventListener("click", async () => {
+    try {
+        const response = await fetch("/cancel_session", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ session_id: 'default' })  // یا session_id واقعی از متغیر
+        });
+
+        if (response.ok) {
+            stopAllAudio()
+            setStatus('آماده برای گفتگو', 'idle');
+        } else {
+            setStatus('خطا در متوقف کردن', 'idle');
+        }
+
+    } catch (err) {
+        setStatus('خطا در ارتباط با سرور', 'idle');
+    }
 });

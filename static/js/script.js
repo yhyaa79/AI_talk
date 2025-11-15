@@ -3,7 +3,6 @@ let audioChunks = [];
 let isRecording = false;
 const micBtn = document.getElementById('micBtn');
 const statusText = document.getElementById('statusText');
-const micArea = document.getElementById('micArea');
 const transcriptArea = document.getElementById('transcriptArea');
 const audioFileInput = document.getElementById('audioFile');
 const sendFileBtn = document.getElementById('sendFileBtn');
@@ -270,11 +269,15 @@ settingsClose.addEventListener('click', () => {
     mainContent.classList.remove('hidden');
     stopBtn.style.display = 'flex';
     settingsBtn.classList.remove('active');
+
+    // رفرش کردن صفحه
+    location.reload();
 });
 
 
 // Status change with animation
 function setStatus(text, state) {
+    const micArea = document.getElementById('micArea');
     statusText.classList.add('fade');
     micArea.className = 'mic-area';
     console.log("state" , state);
@@ -714,7 +717,7 @@ openBottom.addEventListener('click', () => {
             container.removeEventListener('transitionend', showElements);
         }, { once: true }); // once: true برای اجرای یک‌بار
         
-        openBottom.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000"><path d="M480-545.33 287.33-352.67 240-400l240-240 240 240-47.33 47.33L480-545.33Z"/></svg>';
+        openBottom.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#6b6b6b"><path d="M480-545.33 287.33-352.67 240-400l240-240 240 240-47.33 47.33L480-545.33Z"/></svg>';
     } else {
         // اول المان‌ها را مخفی می‌کنیم
         statusText.style.display = 'none';
@@ -724,7 +727,7 @@ openBottom.addEventListener('click', () => {
         // بعد minHeight را تغییر می‌دهیم
         container.style.minHeight = '300px';
         
-        openBottom.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#000000"><path d="M480-344 240-584l47.33-47.33L480-438.67l192.67-192.66L720-584 480-344Z"/></svg>';
+        openBottom.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" height="40px" viewBox="0 -960 960 960" width="40px" fill="#6b6b6b"><path d="M480-344 240-584l47.33-47.33L480-438.67l192.67-192.66L720-584 480-344Z"/></svg>';
     }
     isFirstClick = !isFirstClick; // تغییر وضعیت کلیک
 });
@@ -737,8 +740,8 @@ document.addEventListener('DOMContentLoaded', function() {
         const computedStyle = window.getComputedStyle(actionButtons);
         if (computedStyle.display === 'none') {
             actionButtons.style.display = 'inline-grid'; 
-            actionButtons.style.right = '10px'; 
-            actionButtons.style.top = '71px'; 
+            actionButtons.style.right = '30px'; 
+            actionButtons.style.top = '410px'; 
         } else {
             actionButtons.style.display = 'none';
         }

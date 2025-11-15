@@ -4,18 +4,33 @@
             box-sizing: border-box;
         }
 
+
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            min-height: 100vh;
-            align-items: center;
+            overflow: hidden;
+            height: 100vh;
+            font-family: 'Vazir', Arial, sans-serif;
+            display: flex;
             justify-content: center;
-            padding: 20px;
-            transition: background 0.8s ease;
+            align-items: center;
+            background: #02021b;
         }
+
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            pointer-events: none;
+            /* بوم از دریافت کلیک مستثنی می‌شود */
+        }
+
 
         /* Background States */
         body.bg-idle {
-            background: linear-gradient(135deg, #5f5f5f 0%, #252525 100%);
+            /*             background: linear-gradient(135deg, #5f5f5f 0%, #252525 100%);
+ */
         }
 
         body.bg-recording {
@@ -46,6 +61,7 @@
             position: relative;
             min-height: 300px;
             transition: min-height 0.3s ease;
+            box-shadow: 0 0 200px #ffffff5c;
         }
 
         h1 {
@@ -65,9 +81,9 @@
 
         /* Settings Toggle */
         .settings-toggle {
-            display: flex;
+            /* display: flex; */
             justify-content: flex-end;
-            margin-bottom: 90px;
+            margin: 0 10px 60px 0;
         }
 
         .settings-btn {
@@ -83,6 +99,7 @@
             transition: all 0.3s ease;
             display: flex;
             align-items: center;
+            border: 2px solid #000000e3;
         }
 
         .settings-btn:hover {
@@ -106,7 +123,7 @@
         .settings-panel {
             background: #f7fafc;
             border-radius: 15px;
-            padding:10px;
+            padding: 10px;
         }
 
         .settings-panel.hidden {
@@ -160,13 +177,6 @@
             position: relative;
         }
 
-        .status-animation {
-            width: 400px;
-            height: 200px;
-            position: relative;
-            margin-bottom: 20px;
-        }
-
         /* Background Animation Circles */
         .wave-circle {
             position: absolute;
@@ -204,6 +214,11 @@
         #stopBtn {
             position: absolute;
             left: 30px;
+            transition: all 0.3s ease;
+        }
+
+        #stopBtn:hover {
+            transform: translateY(-2px);
         }
 
         .stop-process {
@@ -222,6 +237,11 @@
             position: absolute;
             bottom: 10px;
             left: 48%;
+            transition: all 0.3s ease;
+        }
+
+        #openBottom:hover {
+            transform: translateY(-2px);
         }
 
         #audioFile {
@@ -378,21 +398,6 @@
             transform: translate(-50%, -50%) scale(1.05);
         }
 
-        .status-text {
-            display: none;
-            text-align: center;
-            color: #4a5568;
-            font-size: 16px;
-            font-weight: 500;
-            min-height: 24px;
-            transition: opacity 0.3s ease, transform 0.3s ease;
-        }
-
-        .status-text.fade {
-            opacity: 0;
-            transform: translateY(-10px);
-        }
-
         /* Action Buttons */
         .action-buttons {
             display: none;
@@ -415,6 +420,11 @@
             background: #00000000;
             border: none;
             margin: 13px 13px 0 auto;
+            transition: all 0.3s ease;
+        }
+
+        .moreBtn:hover {
+            transform: translateY(-2px);
         }
 
         .btn {
@@ -540,4 +550,176 @@
 
         input[type="file"] {
             display: none;
+        }
+
+
+
+        .status-animation {
+            width: 400px;
+            height: 200px;
+            position: relative;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+
+        .viz-item {
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            background: #000;
+            border-radius: 50%;
+            left: calc(90px + var(--i, 0) * 50px);
+            top: 90px;
+            transform: scale(1) translateY(0);
+            transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        .status-text {
+            display: none;
+            text-align: center;
+            color: #4a5568;
+            font-size: 16px;
+            font-weight: 500;
+            min-height: 24px;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .status-text.fade {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        /* Idle: Static horizontal circles */
+        .mic-area.state-idle .viz-item {
+            transform: scale(1) translateY(0);
+        }
+
+        /* Recording: Merge to center and pulse via parent scale */
+        .mic-area.state-recording .viz-item {
+            left: 190px;
+            top: 90px;
+            width: 55px;
+            height: 55px;
+            transform: scale(1) translateY(0);
+            transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                transform 0.3s ease-out;
+        }
+
+        .mic-area.state-recording .status-animation {
+            transform: scale(var(--vol, 1));
+            transform-origin: center;
+            transition: transform 0.08s linear;
+        }
+
+        /* Processing: Disperse then sequential jump loading */
+        .mic-area.state-processing .viz-item {
+            animation: loadingJump 0.8s ease-in-out infinite;
+            animation-delay: calc(var(--i, 0) * 0.15s);
+            transform: scale(1) translateY(0);
+            transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        @keyframes loadingJump {
+            0% {
+                transform: translateY(0) scale(1);
+            }
+
+            50% {
+                transform: translateY(-40px) scale(1.1);
+            }
+
+            100% {
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        /* Generating: Disperse with per-circle audio-reactive vertical pull */
+        .mic-area.state-generating .viz-item {
+            transform: translateY(var(--offset, 0px)) scale(1);
+            transition: transform 0.08s linear;
+        }
+
+
+        .wave {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 100px;
+            background: linear-gradient(180deg, rgba(0, 255, 255, 0.3) 0%, transparent 100%);
+            z-index: 2;
+            animation: wave 4s ease-in-out infinite;
+            pointer-events: none;
+            /* امواج از دریافت کلیک مستثنی می‌شوند */
+        }
+
+        .content {
+            position: relative;
+            z-index: 10;
+            /* بالاتر از بوم و امواج */
+            text-align: center;
+            color: #fff;
+            text-shadow: 0 0 15px rgba(0, 255, 255, 0.8);
+            padding: 20px;
+        }
+
+        .content h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        .content p {
+            font-size: 1.3rem;
+            max-width: 700px;
+            margin: 0 auto;
+            opacity: 0.9;
+        }
+
+        /* استایل دکمه‌ها */
+        .content button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 1rem;
+            background: linear-gradient(45deg, #00f6ff, #ff00ff);
+            border: none;
+            border-radius: 5px;
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            z-index: 11;
+            /* اطمینان از بالاتر بودن دکمه‌ها */
+        }
+
+        .content button:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(0, 255, 255, 0.7);
+        }
+
+        @keyframes wave {
+
+            0%,
+            100% {
+                transform: translateY(0);
+                opacity: 0.5;
+            }
+
+            50% {
+                transform: translateY(-20px);
+                opacity: 0.8;
+            }
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 10px #00f6ff, 0 0 20px #00f6ff;
+            }
+
+            to {
+                text-shadow: 0 0 20px #00f6ff, 0 0 30px #ff00ff;
+            }
         }

@@ -20,34 +20,25 @@ API_KEY_OPENAI = os.getenv("API_KEY_OPENAI")
 # =======================
 
 def voice_to_text(input_binary, language=None, model_selekt="whisper-1", filename="audio.mp3"):
-    """
-    Optimized voice-to-text using OpenAI Whisper API.
-    Note: OpenAI Whisper uses a single model 'whisper-1'. The model_selekt parameter is ignored.
-    This function transcribes the audio to text in the original language without translation.
-    If language is specified, it forces the transcription in that language.
-    If not specified, Whisper auto-detects the language and transcribes accordingly.
-    """
-    
-    # OpenAI API endpoint and key (replace with your actual key)
     API_URL = "https://api.openai.com/v1/audio/transcriptions"
     
     headers = {
-        "Authorization": f"Bearer {API_KEY_OPENAI}"  # فرض بر این است که API_KEY_OPENAI تعریف شده باشد
+        "Authorization": f"Bearer {API_KEY_OPENAI}"
     }
     
     files = {"file": (filename, input_binary, "audio/mpeg")}
     data = {
         "model": model_selekt,
         "response_format": "json",
+        "temperature": 0,  # اضافه کردن temperature=0 برای سرعت بیشتر
     }
     
     if language:
-        data["language"] = language  # اصلاح: زبان ورودی را مستقیماً پاس می‌دهیم، نه 'en'
-    
-    # اگر language مشخص نشود، Whisper خودش زبان را تشخیص می‌دهد و بدون ترجمه ترانسکریپت می‌کند
+        data["language"] = language
     
     try:
-        r = requests.post(API_URL, headers=headers, files=files, data=data, timeout=60)
+        # کاهش timeout برای سرعت بیشتر
+        r = requests.post(API_URL, headers=headers, files=files, data=data, timeout=30)
         
         if r.status_code not in (200, 201):
             return None
@@ -58,12 +49,12 @@ def voice_to_text(input_binary, language=None, model_selekt="whisper-1", filenam
         if not text:
             return None
         
-        return {"text": text}  # Return a dict similar to parse_stt_result for compatibility
+        return {"text": text}
     
     except Exception as e:
         print(f'error: {e}')
         return None
-
+    
 # =======================
 # تابع LLM بهینه‌شده با Groq (سریع‌ترین)
 # =======================
@@ -77,7 +68,7 @@ def text_to_text(input_text, history=None, model="openai/gpt-4o-mini", toneLLM="
     # سیستم پرامپت پیش‌فرض
     system_prompt = {
         "role": "system",
-        "content": f"You are a voice model with a {toneLLM}, colloquial tone, each sentence should be 10-15 words long and end with a '.'."
+        "content": f"You are a voice model with a {toneLLM}, colloquial tone. Keep sentences SHORT (5-8 words). End each with '.' or ','."
     }
     
     # پیام کاربر جدید
@@ -149,29 +140,26 @@ def text_to_text(input_text, history=None, model="openai/gpt-4o-mini", toneLLM="
 # =======================
 
 
-def text_to_audio(input_text, model="tts-1", voice="alloy"):
-    """
-    TTS بهینه‌شده با استفاده از OpenAI API.
-    Note: مدل پیش‌فرض 'tts-1' است. صداها: alloy, echo, fable, onyx, nova, shimmer.
-    """
+def text_to_audio(input_text, model="tts-1", voice="alloy", speed=1.0):
     print(f"...text_to_audio: {input_text[:30]}...")
     
-    # چک کردن voice و تنظیم پیش‌فرض معتبر
     valid_voices = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]
     if not voice or voice not in valid_voices:
         voice = "alloy"
     
     url = "https://api.openai.com/v1/audio/speech"
-    headers = {"Authorization": f"Bearer {API_KEY_OPENAI}"}  # کلید API رو جایگزین کن
+    headers = {"Authorization": f"Bearer {API_KEY_OPENAI}"}
     payload = {
         "model": model,
         "input": input_text,
-        "voice": voice,  # حالا مطمئناً معتبره
-        "response_format": "mp3"
+        "voice": voice,
+        "response_format": "mp3",
+        "speed": speed  # اضافه کردن speed control
     }
     
     try:
-        response = requests.post(url, headers=headers, json=payload, stream=True, timeout=30)
+        # کاهش timeout برای واکنش سریع‌تر
+        response = requests.post(url, headers=headers, json=payload, stream=True, timeout=15)
         
         if response.status_code not in (200, 201):
             return b""
@@ -191,7 +179,7 @@ def text_to_audio(input_text, model="tts-1", voice="alloy"):
 # =======================
 # تابع کمکی: استخراج جمله کامل
 # =======================
-def extract_complete_sentence(text, pattern=r'[.؛!؟]'):
+def extract_complete_sentence(text, pattern=r'[.؛!؟\n,،]'):
     """
     جمله کامل آخر را استخراج می‌کند
     """

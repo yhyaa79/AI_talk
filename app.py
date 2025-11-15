@@ -176,7 +176,7 @@ def process_audio_stream():
             full_response = []
             
             # ThreadPool برای TTS های موازی
-            executor = ThreadPoolExecutor(max_workers=3)
+            executor = ThreadPoolExecutor(max_workers=5)
             pending_tts = {}  # {future: (index, text)}
             
             sentence_pattern = r'[.؛!؟\n]'
@@ -208,7 +208,6 @@ def process_audio_stream():
             
             for llm_chunk in llm_stream:
                 if cancel_event.is_set():
-                    # shutdown executor برای توقف TTS ها
                     executor.shutdown(wait=False)
                     yield f"data: {json.dumps({'type': 'cancelled', 'message': 'پروسس در مرحله LLM قطع شد'})}\n\n"
                     return
@@ -222,21 +221,22 @@ def process_audio_stream():
                 # ارسال فوری text به client
                 yield f"data: {json.dumps({'type': 'text_chunk', 'text': llm_chunk})}\n\n"
                 
-                # شرط کات: حداقل 2 کلمه + علامت پایان
+                # شرط کات تهاجمی‌تر برای اولین chunk:
                 words = re.findall(r'\S+', chunk_buffer)
                 has_end = bool(re.search(sentence_pattern, chunk_buffer))
                 
-                if len(words) >= 2 and has_end:
+                # برای اولین chunk، شرط کمتری بگذارید:
+                min_words = 1 if chunk_count == 0 else 2  # اولین chunk فقط 1 کلمه کافیست
+                
+                if len(words) >= min_words and has_end:
                     sentence, remaining = extract_complete_sentence(chunk_buffer, sentence_pattern)
                     
-                    if sentence.strip() and sentence.strip() not in ['.', '؛', '!', '؟']:
-                        # چک cancel قبل از TTS
+                    if sentence.strip() and sentence.strip() not in ['.', '؛', '!', '؟', ',', '،']:
                         if cancel_event.is_set():
                             executor.shutdown(wait=False)
                             yield f"data: {json.dumps({'type': 'cancelled', 'message': 'پروسس قبل از TTS قطع شد'})}\n\n"
                             return
                         
-                        # شروع TTS به صورت async با wrapper
                         def tts_with_cancel(sent):
                             if cancel_event.is_set():
                                 return b""
@@ -246,8 +246,8 @@ def process_audio_stream():
                         pending_tts[future] = (chunk_count, sentence)
                         chunk_count += 1
                     
-                    chunk_buffer = remaining
-                
+                    chunk_buffer = remaining     
+
                 # چک کردن TTS های آماده
                 done_futures = [f for f in list(pending_tts) if f.done()]
                 for future in done_futures:
