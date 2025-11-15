@@ -216,7 +216,6 @@ function updateOutputViz() {
     const bands = 5;
     const bandWidth = Math.floor(freqData.length / bands);
     const vizItems = document.querySelectorAll('.status-animation .viz-item');
-    
     for (let i = 0; i < bands; i++) {
         let sum = 0;
         const start = i * bandWidth;
@@ -225,22 +224,14 @@ function updateOutputViz() {
             sum += freqData[j];
         }
         const avg = sum / (end - start) / 255;
-        
         // تغییر ارتفاع - از 35px تا 175px (5 برابر)
         const baseHeight = 35; // ارتفاع پایه
         const maxHeight = baseHeight * 5; // حداکثر ارتفاع (175px)
         const height = baseHeight + (avg * (maxHeight - baseHeight));
-        
         vizItems[i].style.width = '35px'; // عرض ثابت
         vizItems[i].style.height = `${height}px`; // ارتفاع متغیر
         vizItems[i].style.borderRadius = '17.5px'; // شکل ستونی با گوشه‌های گرد
-        
-        // برای رشد از مرکز، جابجایی عمودی را تنظیم می‌کنیم
-        // وقتی ارتفاع افزایش می‌یابد، باید نصف تفاوت را به بالا جابجا کنیم
-        const heightDiff = height - baseHeight;
-        const offset = -(heightDiff / 2);
-        
-        vizItems[i].style.transform = `translateY(${offset}px)`;
+        // حذف محاسبات offset و transform - centering خودکار با CSS
     }
 }
 
@@ -567,49 +558,71 @@ function addAudioToPlaylist(index, chunkText, audioB64) {
 }
 
 function sendAudioStream(formData) {
+    let session_id = localStorage.getItem('user_session_id');
+    if (!session_id) {
+        session_id = 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        localStorage.setItem('user_session_id', session_id);
+    }
+
+    formData.append('session_id', session_id);
+
     fetch('/process_audio_stream', {
         method: 'POST',
         body: formData
     })
-        .then(response => {
-            if (!response.ok) {
-                throw new Error('خطا در سرور: ' + response.statusText);
-            }
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
+    .then(response => {
+        if (!response.ok) {
+            return response.json().then(err => {
+                // اگر کد 429 (Too Many Requests) بود → الرت + setStatus
+                if (response.status === 429) {
+                    alert(err.error); // نمایش پیام خطای فارسی از سرور
+                    setStatus('لطفا ساعتی دیگر امتحان کنید', 'idle');
+                } else {
+                    throw new Error(err.error || 'خطا در سرور: ' + response.statusText);
+                }
+            });
+        }
 
-            function readStream() {
-                reader.read().then(({ done, value }) => {
-                    if (done) {
-                        return;
-                    }
-                    buffer += decoder.decode(value, { stream: true });
-                    let lines = buffer.split('\n\n');
-                    buffer = lines.pop() || '';
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-                    lines.forEach(line => {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                handleStreamData(data);
-                            } catch (e) {
-                                console.error('خطا در parse SSE:', e);
-                            }
+        function readStream() {
+            reader.read().then(({ done, value }) => {
+                if (done) return;
+
+                buffer += decoder.decode(value, { stream: true });
+                let lines = buffer.split('\n\n');
+                buffer = lines.pop() || '';
+
+                lines.forEach(line => {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            handleStreamData(data);
+                        } catch (e) {
+                            console.error('خطا در parse SSE:', e);
                         }
-                    });
-
-                    readStream();
-                }).catch(err => {
-                    setStatus('خطا در ارتباط با سرور', 'idle');
+                    }
                 });
-            }
 
-            readStream();
-        })
-        .catch(err => {
+                readStream();
+            }).catch(err => {
+                setStatus('خطا در ارتباط با سرور', 'idle');
+            });
+        }
+
+        readStream();
+    })
+    .catch(err => {
+        // خطاهای غیر 429 (مثل شبکه، خطای سرور و ...)
+        if (err.message.includes('محدودیت ارسال پیام')) {
+            alert(err.message);
+            setStatus('لطفا ساعتی دیگر امتحان کنید', 'idle');
+        } else {
             setStatus('خطا: ' + err.message, 'idle');
-        });
+        }
+    });
 }
 
 function handleStreamData(data) {

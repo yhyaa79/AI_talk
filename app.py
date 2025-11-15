@@ -39,12 +39,25 @@ cancel_flags = {}  # session_id: threading.Event()
 # روت اصلی: سرو کردن HTML
 @app.route('/')
 def index():
-    user_id = session.get('user_id')
-    if not user_id:
-        user_id = str(uuid.uuid4())
-        session['user_id'] = user_id
-        
-    return send_from_directory('static/html', 'index.html')
+    # دریافت یا ایجاد user_id در session
+    if 'user_id' not in session:
+        session['user_id'] = str(uuid.uuid4())
+
+    user_id = session['user_id']
+
+    # فقط در صورت ارسال session_id از طریق query parameter یا JSON (POST)
+    session_id = request.args.get('session_id')  # برای GET
+    # یا اگر POST است: session_id = request.json.get('session_id')
+
+    # فقط اگر session_id جدید باشد، تاریخچه را پاک کن
+    if session_id and session_id not in conversation_history:
+        conversation_history[session_id] = []
+    # یا اگر بخواهید همیشه پاک شود (مثلاً شروع مکالمه جدید):
+    # else:
+    #     conversation_history[session_id] = []
+
+    # سرو کردن فایل HTML
+    return send_from_directory(os.path.join(app.static_folder, 'html'), 'index.html')
 
 
 
@@ -52,27 +65,75 @@ def index():
 # =======================
 # Route اصلی بهینه‌شده با Parallel Processing و Cancel Support
 # =======================
+import json
+from datetime import datetime, timedelta
+
+
+# مسیر فایل JSON برای ذخیره وضعیت کاربران
+RATE_LIMIT_FILE = '/Users/yayhaeslami/Python/my_workspace/resume/my_project/AI_talk/rate_limits.json'
+
+# بارگذاری داده‌های rate limit
+def load_rate_limits():
+    if os.path.exists(RATE_LIMIT_FILE):
+        with open(RATE_LIMIT_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
+
+# ذخیره داده‌های rate limit
+def save_rate_limits(data):
+    with open(RATE_LIMIT_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
 @app.route('/process_audio_stream', methods=['POST'])
 def process_audio_stream():
     if 'audio' not in request.files:
         return jsonify({'error': 'هیچ فایلی ارسال نشده'}), 400
     
     audio_file = request.files['audio']
+    session_id = request.form.get('session_id')
     
+    if not session_id:
+        return jsonify({'error': 'شناسه کاربر یافت نشد'}), 400
+
     # دریافت پارامترها
-    modelSTT = request.form.get('modelSTT', '#g1_whisper-medium')  # small برای سرعت
+    modelSTT = request.form.get('modelSTT', '#g1_whisper-medium')
     language = request.form.get('language', None)
-    modelLLM = request.form.get('modelLLM', 'groq')  # groq یا openrouter
+    modelLLM = request.form.get('modelLLM', 'groq')
     toneLLM = request.form.get('toneLLM', 'friendly')
     modelTTS = request.form.get('modelTTS', 'elevenlabs/v3_alpha')
     voiceTTS = request.form.get('nameVoiceTTS', 'Alice')
-    session_id = request.form.get('session_id', 'default')
     
     if language == "default":
         language = None
     
     if audio_file.filename == '':
         return jsonify({'error': 'فایل خالی است'}), 400
+
+    # --- سیستم Rate Limit ---
+    rate_limits = load_rate_limits()
+    now = datetime.now()
+    user_data = rate_limits.get(session_id, {'count': 0, 'timestamp': None})
+
+    # اگر اولین بار است یا بیش از ۱۲ ساعت گذشته
+    if user_data['count'] == 0 or (user_data['timestamp'] and (now - datetime.fromisoformat(user_data['timestamp'])) > timedelta(hours=12)):
+        user_data['count'] = 1
+        user_data['timestamp'] = now.isoformat()
+        rate_limits[session_id] = user_data
+        save_rate_limits(rate_limits)
+    else:
+        # اگر کمتر از ۱۲ ساعت گذشته
+        if user_data['count'] >= 5:
+            remaining = timedelta(hours=12) - (now - datetime.fromisoformat(user_data['timestamp']))
+            hours = remaining.seconds // 3600
+            minutes = (remaining.seconds % 3600) // 60
+            return jsonify({
+                'error': f'شما در ۱۲ ساعت گذشته ۵ پیام ارسال کرده‌اید.\nلطفاً {hours} ساعت و {minutes} دقیقه دیگر صبر کنید.'
+            }), 429  # ← کد 429 برای Rate Limit
+        else:
+            user_data['count'] += 1
+            user_data['timestamp'] = now.isoformat()  # بروزرسانی زمان آخرین پیام
+            rate_limits[session_id] = user_data
+            save_rate_limits(rate_limits)
     
     input_binary = audio_file.read()
     

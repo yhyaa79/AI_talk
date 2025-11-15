@@ -569,11 +569,25 @@
             background: #000;
             border-radius: 50%;
             left: calc(90px + var(--i, 0) * 50px);
-            top: 90px;
-            transform: scale(1) translateY(0);
-            transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+            top: 0;
+            bottom: 0;
+            margin: auto;
+            transition: left 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                height 0.08s linear,
+                border-radius 0.08s linear,
                 transform 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        /* اضافه شدن انیمیشن updown از کد مثال برای حالت idle */
+        @keyframes updown {
+            0% {
+                transform: translateY(0);
+            }
+
+            50% {
+                transform: translateY(15px);
+            }
+
         }
 
         .status-text {
@@ -593,18 +607,24 @@
 
         /* Idle: Static horizontal circles */
         .mic-area.state-idle .viz-item {
-            transform: scale(1) translateY(0);
+            animation: updown 1.2s calc(var(--i, 0) * 0.2s) infinite ease-in-out alternate;
+            transform: translateY(0);
         }
 
         /* Recording: Merge to center and pulse via parent scale */
         .mic-area.state-recording .viz-item {
-            left: 190px;
-            top: 90px;
+            left: calc(50% - 27.5px);
+            top: 0;
+            bottom: 0;
+            margin: auto;
             width: 55px;
             height: 55px;
-            transform: scale(1) translateY(0);
-            transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+            border-radius: 50%;
+            transform: translateY(0);
+            transition: left 0.3s ease-out,
+                width 0.3s ease-out,
+                height 0.3s ease-out,
+                border-radius 0.3s ease-out,
                 transform 0.3s ease-out;
         }
 
@@ -614,13 +634,12 @@
             transition: transform 0.08s linear;
         }
 
-        /* Processing: Disperse then sequential jump loading */
+        /* Processing: Disperse then sequential jump loading - تنظیم transform */
         .mic-area.state-processing .viz-item {
             animation: loadingJump 0.8s ease-in-out infinite;
             animation-delay: calc(var(--i, 0) * 0.15s);
-            transform: scale(1) translateY(0);
-            transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-                top 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+            transform: translateY(0);
+            transition: left 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94);
         }
 
         @keyframes loadingJump {
@@ -639,8 +658,10 @@
 
         /* Generating: Disperse with per-circle audio-reactive vertical pull */
         .mic-area.state-generating .viz-item {
-            transform: translateY(var(--offset, 0px)) scale(1);
-            transition: transform 0.08s linear;
+            transform: translateY(0);
+            transition: height 0.02s linear,
+                border-radius 0.08s linear,
+                transform 0.08s linear;
         }
 
 
