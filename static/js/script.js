@@ -512,6 +512,7 @@ function onEnded() {
 }
 
 function addAudioToPlaylist(index, chunkText, audioB64) {
+    setStatus('تولید پاسخ هوش مصنوعی...', 'generating');
     const blob = base64ToBlob(audioB64);
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
@@ -634,7 +635,6 @@ function handleStreamData(data) {
         isPlaying = false;
         allAudiosFinished = false;
         generationComplete = false;
-        setStatus('تولید پاسخ هوش مصنوعی...', 'generating');
     } else if (data.type === 'audio_chunk') {
         addAudioToPlaylist(data.index, data.chunk_text, data.audio_b64);
     } else if (data.type === 'error_chunk') {
