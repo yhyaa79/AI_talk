@@ -68,7 +68,7 @@ function updateOutputViz() {
         }
         const avg = sum / (end - start) / 255;
         const baseHeight = 35;
-        const maxHeight = baseHeight * 5;
+        const maxHeight = baseHeight * 8;
         const height = baseHeight + (avg * (maxHeight - baseHeight));
         vizItems[i].style.width = '35px';
         vizItems[i].style.height = `${height}px`;

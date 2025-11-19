@@ -7,7 +7,7 @@ function setStatus(text, state) {
     statusText.classList.add('fade');
     micArea.className = 'mic-area';
     console.log("state", state);
-    
+
     const activeStates = ["processing", "recording", "generating"];
     if (activeStates.includes(state)) {
         stopProcess.style.display = 'flex';
@@ -47,7 +47,11 @@ function checkIfComplete() {
         const vizItems = document.querySelectorAll('.viz-item');
         vizItems.forEach(item => {
             item.style.removeProperty('--offset');
+            item.style.height = "35px"
         });
         statusAnimation.style.removeProperty('--vol');
+
+        // return dots to default height
+
     }
 }
