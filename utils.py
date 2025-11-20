@@ -251,20 +251,20 @@ def check_rate_limit(session_id):
     """
     rate_limits = load_rate_limits()  # حالا safe
     now = datetime.now()
-    user_data = rate_limits.get(session_id, {'count': 0, 'timestamp': None})
+    user_data = rate_limits.get(session_id, {'count': 0, 'active': 'true', 'timestamp': None})
 
-    if user_data['count'] == 0 or (user_data['timestamp'] and (now - datetime.fromisoformat(user_data['timestamp'])) > timedelta(hours=12)):
+    if user_data['count'] == 0 or (user_data['timestamp'] and (now - datetime.fromisoformat(user_data['timestamp'])) > timedelta(hours=24)):
         user_data['count'] = 1
         user_data['timestamp'] = now.isoformat()
         rate_limits[session_id] = user_data
         save_rate_limits(rate_limits)  # حالا safe
         return {'allowed': True}
     else:
-        if user_data['count'] >= 5:
-            remaining = timedelta(hours=12) - (now - datetime.fromisoformat(user_data['timestamp']))
+        if user_data['count'] >= 5 and user_data['active'] != "false":
+            remaining = timedelta(hours=24) - (now - datetime.fromisoformat(user_data['timestamp']))
             hours = remaining.seconds // 3600
             minutes = (remaining.seconds % 3600) // 60
-            return {'error': f'شما در ۱۲ ساعت گذشته ۵ پیام ارسال کرده‌اید.\nلطفاً {hours} ساعت و {minutes} دقیقه دیگر صبر کنید.'}
+            return {'error': f'شما در ۲۴ ساعت گذشته ۵ پیام ارسال کرده‌اید.\nلطفاً {hours} ساعت و {minutes} دقیقه دیگر صبر کنید.'}
         else:
             user_data['count'] += 1
             user_data['timestamp'] = now.isoformat()

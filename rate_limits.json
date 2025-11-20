@@ -1,6 +1,12 @@
 {
   "user_5opbm369z_1763200618181": {
     "count": 3,
-    "timestamp": "2025-11-18T22:36:57.007262"
+    "active": "false",
+    "timestamp": "2025-11-19T22:59:26.894614"
+  },
+  "user_7etv4gwzw_1763573277111": {
+    "count": 5,
+    "active": "false",
+    "timestamp": "2025-11-19T22:10:35.846398"
   }
 }
