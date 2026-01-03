@@ -1,0 +1,4 @@
+Flask
+python-dotenv
+requests
+gunicorn  # برای ران کردن اپ در پروداکشن با PM2 یا مستقیم

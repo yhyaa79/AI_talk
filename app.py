@@ -11,24 +11,25 @@ conversation_history = {}
 cancel_flags = {}  
 
 
-app = Flask(__name__, 
+""" app = Flask(__name__, 
             static_url_path='/AI_talk/static',     # CSS و JS از اینجا لود بشن
             static_folder='static', 
-            template_folder='templates')
+            template_folder='templates') """
+app = Flask(__name__,)
 app.secret_key = 'my_secret_key' 
 
-
+""" 
 app.config['APPLICATION_ROOT'] = '/AI_talk'
 app.config['PREFERRED_URL_SCHEME'] = 'https'
-
+ """
 # =======================
 # Main route: HTML setup
 # =======================
 
-@app.route('/AI_talk/')
+""" @app.route('/AI_talk/')
 def ai_talk_root():
     print()
-    return send_from_directory('static/html', 'index.html')
+    return send_from_directory('static/html', 'index.html') """
 
 @app.route('/')
 def index():
@@ -128,4 +129,4 @@ def cancel_session():
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=8090)  
+    app.run(debug=True, host='0.0.0.0', port=4001)  
